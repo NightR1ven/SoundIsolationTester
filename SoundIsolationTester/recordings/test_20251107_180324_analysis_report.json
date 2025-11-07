@@ -1,0 +1,13 @@
+{
+  "test_name": "test_20251107_180324",
+  "timestamp": "2025-11-07 18:14:05",
+  "analysis_type": "local_audio_analysis",
+  "results": {
+    "level_comparison": {
+      "outside_rms": 8.46480397740379e-05,
+      "inside_rms": 0.07968597114086151,
+      "db_reduction": 59.47529602050781,
+      "isolation_quality": "отличная"
+    },
+    "frequency_analysis": {
+      "low_freq_reduction": 
