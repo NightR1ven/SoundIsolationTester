@@ -33,7 +33,10 @@ class SimpleSoundTester:
         self.root.geometry("1000x700")
         
         self.center_window()
-        
+
+         # Создаем стиль ДО setup_ui
+        self.setup_styles()
+
         try:
             self.audio_core = AudioCore()
             self.ai_analyzer = SoundIsolationAnalyzer()
@@ -43,7 +46,29 @@ class SimpleSoundTester:
         except Exception as e:
             messagebox.showerror("Ошибка инициализации", f"Не удалось инициализировать аудио систему:\n{e}")
             self.root.destroy()
-    
+    def setup_styles(self):
+        """Настройка стилей для кнопок"""
+        style = ttk.Style()
+        
+        # Стиль для красной кнопки
+        style.configure("Record.TButton",
+        foreground="#ff4444"         # белый текст
+    )
+
+        # Стиль при наведении
+        style.map("Record.TButton",
+
+        foreground=[
+            ('active', 'black'),
+            ('pressed', 'black'),
+            ('disabled', 'gray')    # ПРИ ОТКЛЮЧЕНИИ - красный текст
+        ],
+        bordercolor=[
+            ('disabled', '#ff4444')    # красная граница при отключении
+        ]
+
+    )
+
     def center_window(self):
         self.root.update_idletasks()
         width = self.root.winfo_width()
@@ -59,7 +84,7 @@ class SimpleSoundTester:
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        title_label = ttk.Label(main_frame, text="🎯 Тестер звукоизоляции помещений", font=('Segoe UI', 16, 'bold'))
+        title_label = ttk.Label(main_frame, text="Тестер звукоизоляции помещений", font=('Segoe UI', 16, 'bold'))
         title_label.pack(pady=10)
         
         notebook = ttk.Notebook(main_frame)
@@ -122,7 +147,7 @@ class SimpleSoundTester:
         btn_frame = ttk.Frame(control_frame)
         btn_frame.pack(fill=tk.X, pady=15)
         
-        self.start_btn = ttk.Button(btn_frame, text="🔴 Начать запись", command=self.start_test, style="Accent.TButton")
+        self.start_btn = ttk.Button(btn_frame, text="🔴 Начать запись", command=self.start_test, style="Record.TButton")
         self.start_btn.pack(side=tk.LEFT, padx=5)
         
         self.stop_btn = ttk.Button(btn_frame, text="⏹️ Остановить", command=self.stop_test, state=tk.DISABLED)
