@@ -18,8 +18,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ai_analyzer.py" />
+    <Compile Include="experiment_manager.py" />
     <Compile Include="main.py" />
     <Compile Include="audio_core.py" />
+    <Compile Include="speech_engine.py" />
+    <Compile Include="speech_recognizer.py" />
+    <Compile Include="spoof_detector.py" />
     <Compile Include="test_audio.py" />
   </ItemGroup>
   <ItemGroup>
@@ -35,6 +39,10 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="requirements.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="dataset\" />
+    <Folder Include="models\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
 </Project>

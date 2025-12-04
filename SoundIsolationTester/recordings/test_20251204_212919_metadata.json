@@ -1,0 +1,16 @@
+{
+  "test_name": "test_20251204_212919",
+  "timestamp": "2025-12-04 21:29:28",
+  "sample_rate": 44100,
+  "duration": 8.6378231292517,
+  "files": {
+    "outside": {
+      "filename": "test_20251204_212919_outside.wav",
+      "filepath": "recordings\\test_20251204_212919_outside.wav",
+      "samples": 380928,
+      "duration": 8.6378231292517
+    },
+    "inside": null
+  },
+  "analysis_ready": true
+}

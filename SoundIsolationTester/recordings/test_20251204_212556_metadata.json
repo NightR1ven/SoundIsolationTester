@@ -1,0 +1,21 @@
+{
+  "test_name": "test_20251204_212556",
+  "timestamp": "2025-12-04 21:26:13",
+  "sample_rate": 44100,
+  "duration": 2.972154195011338,
+  "files": {
+    "outside": {
+      "filename": "test_20251204_212556_outside.wav",
+      "filepath": "recordings\\test_20251204_212556_outside.wav",
+      "samples": 131072,
+      "duration": 2.972154195011338
+    },
+    "inside": {
+      "filename": "test_20251204_212556_inside.wav",
+      "filepath": "recordings\\test_20251204_212556_inside.wav",
+      "samples": 130048,
+      "duration": 2.948934240362812
+    }
+  },
+  "analysis_ready": true
+}
