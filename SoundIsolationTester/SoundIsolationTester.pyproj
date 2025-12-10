@@ -18,9 +18,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ai_analyzer.py" />
+    <Compile Include="download_models.py" />
     <Compile Include="experiment_manager.py" />
     <Compile Include="main.py" />
     <Compile Include="audio_core.py" />
+    <Compile Include="models\vosk\large-ru\decode.py" />
     <Compile Include="speech_engine.py" />
     <Compile Include="speech_recognizer.py" />
     <Compile Include="spoof_detector.py" />
@@ -38,11 +40,94 @@
     </Interpreter>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="models\vosk\large-ru\am\final.mdl" />
+    <Content Include="models\vosk\large-ru\am\frame_subsampling_factor" />
+    <Content Include="models\vosk\large-ru\am\tree" />
+    <Content Include="models\vosk\large-ru\conf\ivector_extractor.conf" />
+    <Content Include="models\vosk\large-ru\conf\mfcc.conf" />
+    <Content Include="models\vosk\large-ru\conf\model.conf" />
+    <Content Include="models\vosk\large-ru\conf\online.conf" />
+    <Content Include="models\vosk\large-ru\decoder-test.wav" />
+    <Content Include="models\vosk\large-ru\extra\golos_crowd.ref" />
+    <Content Include="models\vosk\large-ru\extra\README" />
+    <Content Include="models\vosk\large-ru\extra\silero_books.ref" />
+    <Content Include="models\vosk\large-ru\extra\silero_calls.ref" />
+    <Content Include="models\vosk\large-ru\extra\silero_youtube.ref" />
+    <Content Include="models\vosk\large-ru\extra\sova_devices.ref" />
+    <Content Include="models\vosk\large-ru\graph\disambig_tid.int" />
+    <Content Include="models\vosk\large-ru\graph\HCLG.fst" />
+    <Content Include="models\vosk\large-ru\graph\num_pdfs" />
+    <Content Include="models\vosk\large-ru\graph\phones.txt" />
+    <Content Include="models\vosk\large-ru\graph\phones\align_lexicon.int" />
+    <Content Include="models\vosk\large-ru\graph\phones\align_lexicon.txt" />
+    <Content Include="models\vosk\large-ru\graph\phones\disambig.int" />
+    <Content Include="models\vosk\large-ru\graph\phones\disambig.txt" />
+    <Content Include="models\vosk\large-ru\graph\phones\optional_silence.csl" />
+    <Content Include="models\vosk\large-ru\graph\phones\optional_silence.int" />
+    <Content Include="models\vosk\large-ru\graph\phones\optional_silence.txt" />
+    <Content Include="models\vosk\large-ru\graph\phones\silence.csl" />
+    <Content Include="models\vosk\large-ru\graph\phones\word_boundary.int" />
+    <Content Include="models\vosk\large-ru\graph\phones\word_boundary.txt" />
+    <Content Include="models\vosk\large-ru\graph\words.txt" />
+    <Content Include="models\vosk\large-ru\ivector\final.dubm" />
+    <Content Include="models\vosk\large-ru\ivector\final.ie" />
+    <Content Include="models\vosk\large-ru\ivector\final.mat" />
+    <Content Include="models\vosk\large-ru\ivector\global_cmvn.stats" />
+    <Content Include="models\vosk\large-ru\ivector\online_cmvn.conf" />
+    <Content Include="models\vosk\large-ru\ivector\splice.conf" />
+    <Content Include="models\vosk\large-ru\README" />
+    <Content Include="models\vosk\large-ru\rescore\G.carpa" />
+    <Content Include="models\vosk\large-ru\rescore\G.fst" />
+    <Content Include="models\vosk\large-ru\rnnlm\features.txt" />
+    <Content Include="models\vosk\large-ru\rnnlm\feat_embedding.final.mat" />
+    <Content Include="models\vosk\large-ru\rnnlm\final.raw" />
+    <Content Include="models\vosk\large-ru\rnnlm\oov.txt" />
+    <Content Include="models\vosk\large-ru\rnnlm\special_symbol_opts.conf" />
+    <Content Include="models\vosk\large-ru\rnnlm\special_symbol_opts.txt" />
+    <Content Include="models\vosk\large-ru\rnnlm\unigram_probs.txt" />
+    <Content Include="models\vosk\large-ru\rnnlm\word_feats.txt" />
+    <Content Include="models\vosk\small-ru\am\final.mdl" />
+    <Content Include="models\vosk\small-ru\conf\mfcc.conf" />
+    <Content Include="models\vosk\small-ru\conf\model.conf" />
+    <Content Include="models\vosk\small-ru\graph\disambig_tid.int" />
+    <Content Include="models\vosk\small-ru\graph\Gr.fst" />
+    <Content Include="models\vosk\small-ru\graph\HCLr.fst" />
+    <Content Include="models\vosk\small-ru\graph\phones\word_boundary.int" />
+    <Content Include="models\vosk\small-ru\ivector\final.dubm" />
+    <Content Include="models\vosk\small-ru\ivector\final.ie" />
+    <Content Include="models\vosk\small-ru\ivector\final.mat" />
+    <Content Include="models\vosk\small-ru\ivector\global_cmvn.stats" />
+    <Content Include="models\vosk\small-ru\ivector\online_cmvn.conf" />
+    <Content Include="models\vosk\small-ru\ivector\splice.conf" />
+    <Content Include="models\vosk\small-ru\README" />
+    <Content Include="models\whisper\base.pt" />
+    <Content Include="models\whisper\medium.pt" />
+    <Content Include="models\whisper\small.pt" />
+    <Content Include="models\whisper\tiny.pt" />
     <Content Include="requirements.txt" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="dataset\" />
     <Folder Include="models\" />
+    <Folder Include="models\silero\" />
+    <Folder Include="models\temp\" />
+    <Folder Include="models\vosk\" />
+    <Folder Include="models\vosk\large-ru\" />
+    <Folder Include="models\vosk\large-ru\am\" />
+    <Folder Include="models\vosk\large-ru\conf\" />
+    <Folder Include="models\vosk\large-ru\extra\" />
+    <Folder Include="models\vosk\large-ru\graph\" />
+    <Folder Include="models\vosk\large-ru\graph\phones\" />
+    <Folder Include="models\vosk\large-ru\ivector\" />
+    <Folder Include="models\vosk\large-ru\rescore\" />
+    <Folder Include="models\vosk\large-ru\rnnlm\" />
+    <Folder Include="models\vosk\small-ru\" />
+    <Folder Include="models\vosk\small-ru\am\" />
+    <Folder Include="models\vosk\small-ru\conf\" />
+    <Folder Include="models\vosk\small-ru\graph\" />
+    <Folder Include="models\vosk\small-ru\graph\phones\" />
+    <Folder Include="models\vosk\small-ru\ivector\" />
+    <Folder Include="models\whisper\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
 </Project>

@@ -20,6 +20,7 @@ class AudioCore:
         self.lock = threading.Lock()
         self.recordings_folder = "recordings"
         self.current_test_name = "unknown_test"
+        self.record_duration = 0  # Добавили для отслеживания длительности
         self._create_recordings_folder()
         
     def _create_recordings_folder(self):
@@ -124,12 +125,15 @@ class AudioCore:
         """Начать запись с двух микрофонов"""
         print(f"🎙️ Запуск записи: outside={outside_device_idx}, inside={inside_device_idx}, duration={duration}сек")
         
-        self.stop_recording()
+        # Останавливаем предыдущую запись если есть
+        if self.is_recording:
+            self.stop_recording()
         
         with self.lock:
             self.audio_data = {'outside': [], 'inside': []}
         
         self.current_test_name = test_name or datetime.now().strftime("test_%Y%m%d_%H%M%S")
+        self.record_duration = duration  # Сохраняем длительность
         self.is_recording = True
         self.record_start_time = time.time()
         
@@ -183,16 +187,26 @@ class AudioCore:
         thread_inside.join()
         
         if success and duration > 0:
-            self.stop_timer = threading.Timer(duration, self.stop_recording)
+            # Запускаем таймер остановки с небольшим запасом времени
+            print(f"⏰ Запуск таймера на {duration} секунд")
+            self.stop_timer = threading.Timer(duration + 0.5, self._stop_by_timer)
+            self.stop_timer.daemon = True  # Важно: делаем поток демоном
             self.stop_timer.start()
         
         return success
+    
+    def _stop_by_timer(self):
+        """Остановка записи по таймеру"""
+        print(f"⏰ Таймер сработал, останавливаем запись после {self.record_duration} сек")
+        if self.is_recording:
+            self.stop_recording()
     
     def stop_recording(self):
         """Остановить запись и сохранить файлы"""
         print("⏹️ Остановка записи...")
         self.is_recording = False
         
+        # Отменяем таймер если он есть
         if hasattr(self, 'stop_timer'):
             self.stop_timer.cancel()
         
