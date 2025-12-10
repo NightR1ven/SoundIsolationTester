@@ -1501,16 +1501,44 @@ class AdvancedSoundTester:
             item = self.recordings_tree.item(selection[0])
             test_name = item['values'][0]
             
-            # Запрашиваем место сохранения
-            filename = filedialog.asksaveasfilename(
-                defaultextension=".txt",
-                filetypes=[("Текстовые файлы", "*.txt"), ("Все файлы", "*.*")],
-                initialfile=f"{test_name}_report.txt"
-            )
+            # Создаем диалог выбора формата
+            format_window = tk.Toplevel(self.root)
+            format_window.title("Выбор формата отчета")
+            format_window.geometry("400x200")
+            format_window.transient(self.root)
+            format_window.grab_set()
             
-            if not filename:
-                return
+            # Центрируем
+            format_window.update_idletasks()
+            x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
+            y = (self.root.winfo_screenheight() // 2) - (200 // 2)
+            format_window.geometry(f'400x200+{x}+{y}')
             
+            ttk.Label(format_window, text="📄 ВЫБЕРИТЕ ФОРМАТ ОТЧЕТА", 
+                     font=('Arial', 12, 'bold')).pack(pady=10)
+            
+            format_var = tk.StringVar(value="html")
+            
+            def create_report(format_type):
+                format_window.destroy()
+                self._create_report_file(test_name, format_type)
+            
+            ttk.Radiobutton(format_window, text="📄 HTML (для печати)", 
+                           value="html", variable=format_var).pack(pady=5)
+            ttk.Radiobutton(format_window, text="📝 Текстовый (TXT)", 
+                           value="txt", variable=format_var).pack(pady=5)
+            ttk.Radiobutton(format_window, text="📊 Excel (XLSX)", 
+                           value="excel", variable=format_var).pack(pady=5)
+            
+            ttk.Button(format_window, text="Создать отчет", 
+                      command=lambda: create_report(format_var.get())).pack(pady=15)
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка генерации отчета: {e}")
+    
+    def _create_report_file(self, test_name, format_type):
+        """Создать файл отчета в указанном формате"""
+        try:
             # Находим метаданные
             metadata_path = os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
             if not os.path.exists(metadata_path):
@@ -1521,61 +1549,652 @@ class AdvancedSoundTester:
             with open(metadata_path, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
             
-            # Создаем отчет
-            report = self._create_report(metadata, test_name)
+            # Ищем файлы анализа
+            analysis_path = os.path.join(self.recordings_folder, f"{test_name}_analysis.json")
+            analysis_data = None
+            if os.path.exists(analysis_path):
+                with open(analysis_path, 'r', encoding='utf-8') as f:
+                    analysis_data = json.load(f)
             
-            # Сохраняем
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(report)
+            # Запрашиваем место сохранения
+            if format_type == "html":
+                ext = ".html"
+                filetypes = [("HTML файлы", "*.html"), ("Все файлы", "*.*")]
+                initialfile = f"{test_name}_report.html"
+            elif format_type == "excel":
+                ext = ".xlsx"
+                filetypes = [("Excel файлы", "*.xlsx"), ("Все файлы", "*.*")]
+                initialfile = f"{test_name}_report.xlsx"
+            else:
+                ext = ".txt"
+                filetypes = [("Текстовые файлы", "*.txt"), ("Все файлы", "*.*")]
+                initialfile = f"{test_name}_report.txt"
             
-            messagebox.showinfo("Успех", f"Отчет сохранен:\n{filename}")
+            filename = filedialog.asksaveasfilename(
+                defaultextension=ext,
+                filetypes=filetypes,
+                initialfile=initialfile
+            )
+            
+            if not filename:
+                return
+            
+            # Создаем отчет в выбранном формате
+            if format_type == "html":
+                self._create_html_report(metadata, analysis_data, filename)
+            elif format_type == "excel":
+                self._create_excel_report(metadata, analysis_data, filename)
+            else:
+                self._create_text_report(metadata, analysis_data, filename)
+            
+            # Показываем сообщение об успехе с опцией открытия
+            if format_type == "html":
+                open_result = messagebox.askyesno("Успех", 
+                    f"HTML-отчет сохранен:\n{filename}\n\n"
+                    f"Открыть в браузере для печати?")
+                
+                if open_result:
+                    webbrowser.open('file://' + os.path.abspath(filename))
+            else:
+                messagebox.showinfo("Успех", f"Отчет сохранен:\n{filename}")
+            
             self.status_var.set("📋 Отчет сгенерирован")
             
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка генерации отчета: {e}")
+            messagebox.showerror("Ошибка", f"Ошибка создания отчета: {e}")
     
-    def _create_report(self, metadata, test_name):
+    def _create_html_report(self, metadata, analysis_data, filename):
+        """Создать HTML отчет для печати"""
+        
+        # Получаем данные из метаданных
+        test_name = metadata.get('test_name', 'Неизвестный тест')
+        timestamp = metadata.get('timestamp', 'Нет данных')
+        duration = metadata.get('duration', 0)
+        sample_rate = metadata.get('sample_rate', 0)
+        
+        # Получаем результаты анализа если есть
+        overall_score = "Н/Д"
+        if analysis_data:
+            results = analysis_data.get('results', {})
+            overall = results.get('overall_assessment', {})
+            overall_score = overall.get('verdict', 'Н/Д')
+            grade = overall.get('grade', 'Н/Д')
+            color = overall.get('color', 'black')
+            recommendations = overall.get('recommendations', [])
+        
+        # Создаем HTML документ
+        html_content = f'''<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчет по тесту звукоизоляции - {test_name}</title>
+    <style>
+        @media print {{
+            @page {{
+                margin: 2cm;
+                size: A4;
+            }}
+            body {{
+                font-size: 12pt;
+            }}
+            .page-break {{
+                page-break-before: always;
+            }}
+            .no-print {{
+                display: none;
+            }}
+        }}
+        
+        * {{
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }}
+        
+        body {{
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background-color: #f9f9f9;
+        }}
+        
+        .header {{
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #2c3e50;
+        }}
+        
+        .header h1 {{
+            color: #2c3e50;
+            font-size: 24pt;
+            margin-bottom: 10px;
+        }}
+        
+        .header .subtitle {{
+            color: #7f8c8d;
+            font-size: 14pt;
+        }}
+        
+        .info-card {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 5px solid #3498db;
+        }}
+        
+        .result-card {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 5px solid #2ecc71;
+        }}
+        
+        .verdict-card {{
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 30px 0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 2px solid #e74c3c;
+        }}
+        
+        .verdict-card h2 {{
+            color: #e74c3c;
+            font-size: 20pt;
+            margin-bottom: 15px;
+        }}
+        
+        .metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }}
+        
+        .metric-item {{
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }}
+        
+        .metric-value {{
+            font-size: 24pt;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 10px 0;
+        }}
+        
+        .metric-label {{
+            color: #6c757d;
+            font-size: 11pt;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        
+        h2 {{
+            color: #2c3e50;
+            margin: 25px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ecf0f1;
+            font-size: 18pt;
+        }}
+        
+        h3 {{
+            color: #34495e;
+            margin: 20px 0 10px 0;
+            font-size: 14pt;
+        }}
+        
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 11pt;
+        }}
+        
+        table th {{
+            background: #2c3e50;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+        }}
+        
+        table td {{
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }}
+        
+        table tr:nth-child(even) {{
+            background: #f8f9fa;
+        }}
+        
+        .recommendations {{
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }}
+        
+        .recommendations ul {{
+            padding-left: 20px;
+            margin: 10px 0;
+        }}
+        
+        .recommendations li {{
+            margin: 8px 0;
+        }}
+        
+        .footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 10pt;
+        }}
+        
+        .print-button {{
+            display: block;
+            width: 200px;
+            margin: 30px auto;
+            padding: 12px 24px;
+            background: #3498db;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            font-size: 12pt;
+        }}
+        
+        .print-button:hover {{
+            background: #2980b9;
+        }}
+        
+        .badge {{
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 10pt;
+            font-weight: bold;
+            margin: 0 5px;
+        }}
+        
+        .badge-success {{
+            background: #d4edda;
+            color: #155724;
+        }}
+        
+        .badge-warning {{
+            background: #fff3cd;
+            color: #856404;
+        }}
+        
+        .badge-danger {{
+            background: #f8d7da;
+            color: #721c24;
+        }}
+        
+        .grade {{
+            font-size: 32pt;
+            font-weight: bold;
+            color: #2c3e50;
+            text-align: center;
+            margin: 20px 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 ОТЧЕТ ПО ТЕСТУ ЗВУКОИЗОЛЯЦИИ</h1>
+        <div class="subtitle">Дипломная работа - Sound Isolation Tester v3.13</div>
+    </div>
+    
+    <div class="info-card">
+        <h2>📋 ИНФОРМАЦИЯ О ТЕСТЕ</h2>
+        <div class="metrics-grid">
+            <div class="metric-item">
+                <div class="metric-label">Название теста</div>
+                <div class="metric-value">{test_name}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Дата и время</div>
+                <div class="metric-value">{timestamp}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Длительность</div>
+                <div class="metric-value">{duration:.1f} сек</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Частота дискретизации</div>
+                <div class="metric-value">{sample_rate} Гц</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="result-card">
+        <h2>📈 РЕЗУЛЬТАТЫ АНАЛИЗА</h2>
+        '''
+        
+        # Добавляем результаты анализа если есть
+        if analysis_data:
+            results = analysis_data.get('results', {})
+            overall = results.get('overall_assessment', {})
+            detailed = results.get('detailed_metrics', {})
+            
+            html_content += f'''
+            <div class="verdict-card">
+                <h2>ВЕРДИКТ</h2>
+                <div class="grade">{overall.get('verdict', 'Н/Д')}</div>
+                <p style="font-size: 14pt; margin-top: 10px;">{overall.get('summary', 'Нет данных')}</p>
+            </div>
+            
+            <h3>Детальные метрики</h3>
+            '''
+            
+            # Базовые метрики
+            if detailed.get('basic'):
+                basic = detailed['basic']
+                html_content += f'''
+                <table>
+                    <tr>
+                        <th>Параметр</th>
+                        <th>Значение</th>
+                        <th>Оценка</th>
+                    </tr>
+                    <tr>
+                        <td>Ослабление звука</td>
+                        <td>{basic.get('attenuation_db', 0):.1f} дБ</td>
+                        <td>{basic.get('attenuation_rating', 'Н/Д')}</td>
+                    </tr>
+                    <tr>
+                        <td>Качество изоляции</td>
+                        <td>{basic.get('isolation_quality', 'Н/Д')}</td>
+                        <td>{basic.get('isolation_rating', 'Н/Д')}</td>
+                    </tr>
+                    <tr>
+                        <td>Корреляция сигналов</td>
+                        <td>{basic.get('correlation', 0):.3f}</td>
+                        <td>{basic.get('correlation_rating', 'Н/Д')}</td>
+                    </tr>
+                </table>
+                '''
+            
+            # Композитные оценки
+            if detailed.get('composite_scores'):
+                composite = detailed['composite_scores']
+                html_content += f'''
+                <h3>Композитные оценки</h3>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-label">Общая оценка</div>
+                        <div class="metric-value">{composite.get('total_score', 0):.1f}/100</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Оценка по шкале</div>
+                        <div class="metric-value">{composite.get('grade', 'Н/Д')}</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Эффективность</div>
+                        <div class="metric-value">{composite.get('effectiveness_percent', 0):.1f}%</div>
+                    </div>
+                </div>
+                '''
+            
+            # Рекомендации
+            recommendations = overall.get('recommendations', [])
+            if recommendations:
+                html_content += '''
+                <div class="recommendations">
+                    <h3>🏆 РЕКОМЕНДАЦИИ ПО УЛУЧШЕНИЮ</h3>
+                    <ul>
+                '''
+                for rec in recommendations:
+                    html_content += f'<li>{rec}</li>'
+                html_content += '</ul></div>'
+        
+        # Если анализа нет, показываем информационное сообщение
+        else:
+            html_content += '''
+            <div style="text-align: center; padding: 40px; background: #f8f9fa; border-radius: 8px;">
+                <h3>⚠️ Анализ не выполнен</h3>
+                <p>Для данной записи не выполнен анализ звукоизоляции.</p>
+                <p>Выполните анализ через вкладку "АНАЛИЗ" для получения подробных результатов.</p>
+            </div>
+            '''
+        
+        # Технические данные
+        html_content += f'''
+        </div>
+        
+        <div class="info-card">
+            <h2>🔧 ТЕХНИЧЕСКИЕ ДАННЫЕ</h2>
+            <table>
+                <tr>
+                    <th>Параметр</th>
+                    <th>Значение</th>
+                </tr>
+        '''
+        
+        # Добавляем технические данные из metadata
+        if 'files' in metadata:
+            files = metadata['files']
+            for channel, data in files.items():
+                html_content += f'''
+                <tr>
+                    <td>Файл ({channel})</td>
+                    <td>{data.get('filename', 'N/A')}</td>
+                </tr>
+                <tr>
+                    <td>Размер ({channel})</td>
+                    <td>{data.get('filesize_mb', 0):.2f} МБ</td>
+                </tr>
+                <tr>
+                    <td>Сэмплов ({channel})</td>
+                    <td>{data.get('samples', 0):,}</td>
+                </tr>
+                '''
+        
+        html_content += f'''
+            </table>
+        </div>
+        
+        <div class="info-card">
+            <h2>📊 СИСТЕМНАЯ ИНФОРМАЦИЯ</h2>
+            <table>
+                <tr>
+                    <td>Дата создания отчета</td>
+                    <td>{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</td>
+                </tr>
+                <tr>
+                    <td>Версия приложения</td>
+                    <td>Sound Isolation Tester v3.13</td>
+                </tr>
+                <tr>
+                    <td>Операционная система</td>
+                    <td>{sys.platform}</td>
+                </tr>
+                <tr>
+                    <td>Версия Python</td>
+                    <td>{sys.version.split()[0]}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="footer">
+            <p>© {datetime.now().year} - Дипломная работа "Разработка системы тестирования звукоизоляции"</p>
+            <p>Отчет сгенерирован автоматически. Для печати нажмите Ctrl+P</p>
+            <p>Все данные конфиденциальны и предназначены только для академического использования</p>
+        </div>
+        
+        <button class="print-button no-print" onclick="window.print()">🖨️ Печать отчета</button>
+        
+        <script>
+            // Автоматически предлагаем печать после загрузки
+            window.onload = function() {{
+                // Автоматическое открытие диалога печати (можно закомментировать если не нужно)
+                // setTimeout(() => {{ window.print(); }}, 1000);
+            }};
+        </script>
+    </body>
+    </html>
+        '''
+        
+        # Сохраняем HTML файл
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+    
+    def _create_excel_report(self, metadata, analysis_data, filename):
+        """Создать Excel отчет"""
+        try:
+            import pandas as pd
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            from openpyxl.utils import get_column_letter
+            
+            # Создаем рабочую книгу
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Отчет звукоизоляции"
+            
+            # Стили
+            header_font = Font(name='Arial', size=12, bold=True, color='FFFFFF')
+            header_fill = PatternFill(start_color='2C3E50', end_color='2C3E50', fill_type='solid')
+            title_font = Font(name='Arial', size=14, bold=True, color='2C3E50')
+            border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                           top=Side(style='thin'), bottom=Side(style='thin'))
+            center_align = Alignment(horizontal='center', vertical='center')
+            
+            # Заголовок
+            ws.merge_cells('A1:F1')
+            ws['A1'] = f'ОТЧЕТ ПО ТЕСТУ ЗВУКОИЗОЛЯЦИИ - {metadata.get("test_name", "N/A")}'
+            ws['A1'].font = title_font
+            ws['A1'].alignment = center_align
+            
+            # Основная информация
+            ws['A3'] = 'Основная информация'
+            ws['A3'].font = Font(bold=True)
+            
+            data = [
+                ['Параметр', 'Значение'],
+                ['Название теста', metadata.get('test_name', 'N/A')],
+                ['Дата и время', metadata.get('timestamp', 'N/A')],
+                ['Длительность', f"{metadata.get('duration', 0):.1f} сек"],
+                ['Частота дискретизации', f"{metadata.get('sample_rate', 0)} Гц"],
+            ]
+            
+            for i, row in enumerate(data, start=3):
+                for j, value in enumerate(row, start=1):
+                    cell = ws.cell(row=i, column=j)
+                    cell.value = value
+                    cell.border = border
+            
+            # Если есть результаты анализа
+            if analysis_data:
+                results = analysis_data.get('results', {})
+                overall = results.get('overall_assessment', {})
+                
+                # Вердикт
+                ws['A8'] = 'Результаты анализа'
+                ws['A8'].font = Font(bold=True)
+                
+                verdict_data = [
+                    ['Вердикт', overall.get('verdict', 'Н/Д')],
+                    ['Оценка', overall.get('grade', 'Н/Д')],
+                    ['Общая оценка', f"{results.get('detailed_metrics', {}).get('composite_scores', {}).get('total_score', 0):.1f}/100"],
+                ]
+                
+                for i, row in enumerate(verdict_data, start=9):
+                    for j, value in enumerate(row, start=1):
+                        cell = ws.cell(row=i, column=j)
+                        cell.value = value
+                        cell.border = border
+            
+            # Настраиваем ширину колонок
+            for col in range(1, 7):
+                ws.column_dimensions[get_column_letter(col)].width = 20
+            
+            # Сохраняем файл
+            wb.save(filename)
+            
+        except ImportError:
+            messagebox.showerror("Ошибка", 
+                "Для создания Excel отчета установите:\n"
+                "pip install pandas openpyxl")
+            raise
+    
+    def _create_text_report(self, metadata, analysis_data, filename):
         """Создать текстовый отчет"""
         report = "=" * 60 + "\n"
         report += "ОТЧЕТ О ТЕСТЕ ЗВУКОИЗОЛЯЦИИ\n"
         report += "=" * 60 + "\n\n"
         
-        report += f"Имя теста: {metadata.get('test_name', test_name)}\n"
+        report += f"Имя теста: {metadata.get('test_name', 'N/A')}\n"
         report += f"Дата и время: {metadata.get('timestamp', 'N/A')}\n"
         report += f"Частота дискретизации: {metadata.get('sample_rate', 'N/A')} Гц\n"
         report += f"Длительность: {metadata.get('duration', 0):.2f} сек\n\n"
         
-        report += "ФАЙЛЫ:\n"
-        files = metadata.get('files', {})
-        for channel in ['outside', 'inside']:
-            file_info = files.get(channel, {})
-            if file_info:
-                report += f"  {channel}: {file_info.get('filename', 'N/A')}\n"
-                report += f"    • Сэмплов: {file_info.get('samples', 0)}\n"
-                report += f"    • Длительность: {file_info.get('duration', 0):.2f} сек\n"
+        if analysis_data:
+            results = analysis_data.get('results', {})
+            overall = results.get('overall_assessment', {})
+            
+            report += "РЕЗУЛЬТАТЫ АНАЛИЗА:\n"
+            report += "-" * 40 + "\n"
+            report += f"Вердикт: {overall.get('verdict', 'Н/Д')}\n"
+            report += f"Оценка: {overall.get('grade', 'Н/Д')}\n"
+            report += f"Сводка: {overall.get('summary', 'Н/Д')}\n\n"
+            
+            # Рекомендации
+            recommendations = overall.get('recommendations', [])
+            if recommendations:
+                report += "РЕКОМЕНДАЦИИ:\n"
+                report += "-" * 40 + "\n"
+                for i, rec in enumerate(recommendations, 1):
+                    report += f"{i}. {rec}\n"
+                report += "\n"
         
-        report += "\n" + "=" * 60 + "\n"
-        report += "РЕКОМЕНДАЦИИ:\n"
-        report += "=" * 60 + "\n\n"
-        
-        # Добавляем общие рекомендации
-        duration = metadata.get('duration', 0)
-        if duration < 5:
-            report += "• Увеличьте время записи до 10+ секунд для более точного анализа\n"
-        
-        report += "• Для точного теста используйте разные голоса снаружи и внутри\n"
-        report += "• Убедитесь, что микрофоны правильно расположены\n"
-        report += "• Избегайте фонового шума во время теста\n"
+        report += "ТЕХНИЧЕСКИЕ ДАННЫЕ:\n"
+        report += "-" * 40 + "\n"
+        if 'files' in metadata:
+            files = metadata['files']
+            for channel, data in files.items():
+                report += f"{channel.upper()}:\n"
+                report += f"  Файл: {data.get('filename', 'N/A')}\n"
+                report += f"  Размер: {data.get('filesize_mb', 0):.2f} МБ\n"
+                report += f"  Сэмплов: {data.get('samples', 0):,}\n"
         
         report += "\n" + "=" * 60 + "\n"
         report += "СИСТЕМНАЯ ИНФОРМАЦИЯ:\n"
-        report += "=" * 60 + "\n\n"
-        
+        report += "-" * 40 + "\n"
         report += f"Дата создания отчета: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        report += f"Версия Python: {sys.version.split()[0]}\n"
+        report += f"Версия приложения: Sound Isolation Tester v3.13\n"
         report += f"Операционная система: {sys.platform}\n"
+        report += f"Версия Python: {sys.version.split()[0]}\n"
         
-        return report
+        report += "\n" + "=" * 60 + "\n"
+        report += "ПРИМЕЧАНИЕ:\n"
+        report += "-" * 40 + "\n"
+        report += "Для более наглядного представления данных рекомендуется\n"
+        report += "создать HTML отчет с возможностью печати.\n"
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(report)
     
     def play_recording(self):
         """Воспроизвести выбранную запись"""
