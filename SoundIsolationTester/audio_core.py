@@ -20,7 +20,8 @@ class AudioCore:
         self.lock = threading.Lock()
         self.recordings_folder = "recordings"
         self.current_test_name = "unknown_test"
-        self.record_duration = 0  # Добавили для отслеживания длительности
+        self.record_duration = 0
+        self.reference_text = None  # НОВОЕ: сохраняем фразу для проверки
         self._create_recordings_folder()
         
     def _create_recordings_folder(self):
@@ -121,9 +122,12 @@ class AudioCore:
                 print(f"❌ Ошибка в callback {channel}: {e}")
         return (in_data, pyaudio.paContinue)
     
-    def start_recording(self, outside_device_idx, inside_device_idx, duration=10, test_name=""):
+    def start_recording(self, outside_device_idx, inside_device_idx, duration=10, test_name="", reference_text=None):
         """Начать запись с двух микрофонов"""
         print(f"🎙️ Запуск записи: outside={outside_device_idx}, inside={inside_device_idx}, duration={duration}сек")
+        
+        # Сохраняем фразу для проверки
+        self.reference_text = reference_text
         
         # Останавливаем предыдущую запись если есть
         if self.is_recording:
@@ -287,7 +291,9 @@ class AudioCore:
             'sample_rate': self.sample_rate,
             'duration': saved_files.get('outside', {}).get('duration', 0),
             'files': saved_files,
-            'analysis_ready': True
+            'analysis_ready': True,
+            'reference_text': self.reference_text,  # НОВОЕ: сохраняем фразу для проверки
+            'app_version': '3.14'
         }
         
         metadata_file = os.path.join(self.recordings_folder, f"{self.current_test_name}_metadata.json")
@@ -295,6 +301,8 @@ class AudioCore:
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
             print(f"✅ Метаданные сохранены: {metadata_file}")
+            if self.reference_text:
+                print(f"📝 Фраза для проверки сохранена в метаданных")
         except Exception as e:
             print(f"❌ Ошибка сохранения метаданных: {e}")
     
@@ -321,7 +329,8 @@ class AudioCore:
                 'inside_samples': len(self.audio_data['inside']),
                 'duration': len(self.audio_data['outside']) / self.sample_rate if self.audio_data['outside'] else 0,
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'test_name': getattr(self, 'current_test_name', 'unknown')
+                'test_name': getattr(self, 'current_test_name', 'unknown'),
+                'reference_text': getattr(self, 'reference_text', None)
             }
     
     def get_recent_recordings(self):

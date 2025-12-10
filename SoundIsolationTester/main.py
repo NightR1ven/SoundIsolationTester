@@ -321,8 +321,8 @@ class RecordingIndicator(tk.Canvas):
 class AdvancedSoundTester:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sound Isolation Tester v3.13 - Дипломная работа")
-        self.root.geometry("1200x900")
+        self.root.title("Sound Isolation Tester v3.14 - Защита от спуфинг-атак")
+        self.root.geometry("1200x950")  # Увеличили высоту
         
         self.center_window()
         
@@ -393,7 +393,7 @@ class AdvancedSoundTester:
         """Центрирование окна"""
         self.root.update_idletasks()
         width = 1200
-        height = 900
+        height = 950
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
@@ -413,7 +413,7 @@ class AdvancedSoundTester:
         
         # Заголовок
         title = ttk.Label(main_frame, 
-            text="🧪 ТЕСТЕР ЗВУКОИЗОЛЯЦИИ - Дипломная работа",
+            text="🧪 ТЕСТЕР ЗВУКОИЗОЛЯЦИИ v3.14 - Защита от спуфинг-атак",
             font=('Arial', 14, 'bold'))
         title.pack(pady=10)
         
@@ -502,7 +502,7 @@ class AdvancedSoundTester:
         )
         self.inside_indicator.pack(side=tk.LEFT, padx=10, fill=tk.BOTH, expand=True)
         
-        # Блок 3: Параметры
+        # Блок 3: Параметры теста
         params_frame = ttk.LabelFrame(parent, text="Параметры теста", padding="10")
         params_frame.pack(fill=tk.X, pady=10)
         
@@ -516,11 +516,28 @@ class AdvancedSoundTester:
         self.duration_var = tk.StringVar(value="15")
         ttk.Spinbox(params_frame, from_=5, to=300, textvariable=self.duration_var, width=15).grid(row=1, column=1, padx=10, pady=5, sticky=tk.W)
         
+        # ФРАЗА ДЛЯ ПРОВЕРКИ (НОВОЕ)
+        ttk.Label(params_frame, text="Фраза для проверки:", font=('Arial', 10, 'bold')).grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.reference_text_var = tk.StringVar(value="Красный трактор стоит на зеленом поле сорок два")
+        self.reference_entry = ttk.Entry(params_frame, textvariable=self.reference_text_var, width=40, font=('Arial', 10))
+        self.reference_entry.grid(row=2, column=1, padx=10, pady=5)
+        
+        # Кнопка для генерации случайной фразы
+        ttk.Button(params_frame, text="🎲 Случайная фраза", 
+                  command=self.generate_random_phrase, width=15).grid(row=2, column=2, padx=5, pady=5)
+        
         # Опции
         self.enable_analysis_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(params_frame, text="Автоматический анализ", variable=self.enable_analysis_var).grid(row=2, column=0, columnspan=2, pady=5, sticky=tk.W)
+        ttk.Checkbutton(params_frame, text="Автоматический анализ", variable=self.enable_analysis_var).grid(row=3, column=0, columnspan=2, pady=5, sticky=tk.W)
         
-        # Блок 4: Управление
+        # Включение проверки текста
+        self.enable_text_check_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(params_frame, text="Проверять соответствие текста (защита от спуфинга)", 
+                       variable=self.enable_text_check_var).grid(row=4, column=0, columnspan=2, pady=5, sticky=tk.W)
+        
+        params_frame.columnconfigure(1, weight=1)
+        
+        # Блок 4: Управление записью
         control_frame = ttk.LabelFrame(parent, text="Управление записью", padding="10")
         control_frame.pack(fill=tk.X, pady=10)
         
@@ -550,6 +567,33 @@ class AdvancedSoundTester:
         # Таймер
         self.timer_label = ttk.Label(indicator_frame, text="00:00 / 00:00", font=('Arial', 12, 'bold'))
         self.timer_label.pack(side=tk.RIGHT)
+        
+        # Подсказка
+        hint_frame = ttk.LabelFrame(parent, text="📝 Инструкция для тестирования", padding="10")
+        hint_frame.pack(fill=tk.X, pady=10)
+        
+        hint_text = "Для защиты от спуфинг-атак:\n1. Установите микрофоны снаружи и внутри помещения\n2. Введите фразу для проверки (или используйте случайную)\n3. Нажмите 'НАЧАТЬ ЗАПИСЬ'\n4. СНАРУЖИ громко произнесите фразу\n5. Система проверит соответствие текста и обнаружит спуфинг-атаки"
+        ttk.Label(hint_frame, text=hint_text, justify=tk.LEFT, wraplength=1100).pack(anchor=tk.W)
+    
+    def generate_random_phrase(self):
+        """Сгенерировать случайную фразу для проверки"""
+        phrases = [
+            "Красный трактор стоит на зеленом поле сорок два",
+            "Синий автомобиль едет по широкой дороге семнадцать",
+            "Высокое дерево растет возле старого дома восемьдесят три",
+            "Быстрая река течет между высокими горами двадцать пять",
+            "Большой корабль плывет по синему морю девяносто шесть",
+            "Жаркое солнце светит над теплым пляжем тридцать четыре",
+            "Стройная береза качается на сильном ветру семьдесят один",
+            "Громкий колокол звонит в старой церкви пятьдесят восемь",
+            "Пушистый кот спит на мягком диване двадцать девять",
+            "Яркая звезда светит в темном небе сто одиннадцать"
+        ]
+        
+        import random
+        phrase = random.choice(phrases)
+        self.reference_text_var.set(phrase)
+        print(f"🎲 Сгенерирована новая фраза: {phrase}")
     
     def refresh_devices(self):
         """Обновить список аудиоустройств"""
@@ -691,12 +735,27 @@ class AdvancedSoundTester:
             
             test_name = self.test_name_var.get()
             duration = int(self.duration_var.get())
+            reference_text = self.reference_text_var.get() if self.enable_text_check_var.get() else None
+            
+            # Проверка наличия текста для проверки
+            if self.enable_text_check_var.get() and not reference_text.strip():
+                messagebox.showwarning("Предупреждение", 
+                    "Введите фразу для проверки или отключите проверку текста.\n"
+                    "Это необходимо для защиты от спуфинг-атак.")
+                return
             
             # Обновляем интерфейс
             self.record_btn.config(state=tk.DISABLED)
             self.stop_btn.config(state=tk.NORMAL)
             self.record_status.config(text="🔴 ИДЕТ ЗАПИСЬ", foreground="red")
-            self.status_var.set("🎙️ Запись начата...")
+            self.status_var.set("🎙️ Запись начата... Произнесите фразу снаружи!")
+            
+            # Показываем фразу для произнесения
+            if reference_text:
+                messagebox.showinfo("Произнесите фразу", 
+                    f"СНАРУЖИ помещения произнесите громко и четко:\n\n"
+                    f"📢 '{reference_text}'\n\n"
+                    f"Система проверит соответствие текста для защиты от спуфинг-атак.")
             
             # Показываем и активируем индикаторы
             self.show_indicators()
@@ -812,10 +871,11 @@ class AdvancedSoundTester:
             if self.enable_analysis_var.get() and saved_files:
                 outside_path = saved_files.get('outside', {}).get('filepath')
                 inside_path = saved_files.get('inside', {}).get('filepath')
+                reference_text = self.reference_text_var.get() if self.enable_text_check_var.get() else None
                 
                 if outside_path and inside_path:
                     test_name = self.test_name_var.get()
-                    self._analyze_recording(outside_path, inside_path, test_name)
+                    self._analyze_recording(outside_path, inside_path, test_name, reference_text)
             
             self.status_var.set("✅ Запись завершена")
             
@@ -872,7 +932,7 @@ class AdvancedSoundTester:
     def setup_analysis_tab(self, parent):
         """Вкладка анализа"""
         # Заголовок
-        ttk.Label(parent, text="АНАЛИЗ ЗАПИСЕЙ", 
+        ttk.Label(parent, text="АНАЛИЗ ЗАПИСЕЙ (с защитой от спуфинга)", 
                  font=('Arial', 12, 'bold')).pack(pady=10)
         
         # Список записей
@@ -880,7 +940,7 @@ class AdvancedSoundTester:
         list_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # TreeView
-        columns = ("name", "date", "duration", "size", "status", "engine")
+        columns = ("name", "date", "duration", "size", "status", "engine", "text_check")
         self.recordings_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=12)
         
         # Заголовки
@@ -890,6 +950,7 @@ class AdvancedSoundTester:
         self.recordings_tree.heading("size", text="Размер")
         self.recordings_tree.heading("status", text="Статус")
         self.recordings_tree.heading("engine", text="Движок")
+        self.recordings_tree.heading("text_check", text="Проверка текста")
         
         # Ширина колонок
         self.recordings_tree.column("name", width=180)
@@ -898,6 +959,7 @@ class AdvancedSoundTester:
         self.recordings_tree.column("size", width=70)
         self.recordings_tree.column("status", width=80)
         self.recordings_tree.column("engine", width=100)
+        self.recordings_tree.column("text_check", width=120)
         
         # Прокрутка
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.recordings_tree.yview)
@@ -916,6 +978,7 @@ class AdvancedSoundTester:
         actions = [
             ("📊 Базовый анализ", self.analyze_selected),
             ("🎤 Распознать речь", self.recognize_speech),
+            ("🛡️ Проверить спуфинг", self.check_spoofing),
             ("🗑️ Удалить запись", self.delete_recording),
             ("📋 Отчет", self.generate_report),
             ("🎵 Воспроизвести", self.play_recording)
@@ -1129,7 +1192,7 @@ class AdvancedSoundTester:
     
     def update_system_info(self):
         """Обновление информации о системе"""
-        info = f"🧪 Sound Isolation Tester - Дипломная работа\n"
+        info = f"🧪 Sound Isolation Tester - Защита от спуфинг-атак\n"
         info += f"📅 Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         info += f"🐍 Python: {sys.version.split()[0]}\n"
         info += f"💻 ОС: {sys.platform}\n"
@@ -1172,13 +1235,14 @@ class AdvancedSoundTester:
         self.system_info.insert(1.0, info)
         self.system_info.config(state=tk.DISABLED)
     
-    def _analyze_recording(self, outside_path, inside_path, test_name):
+    def _analyze_recording(self, outside_path, inside_path, test_name, reference_text=None):
         """Анализ записи"""
         try:
             self.status_var.set("📊 Анализ записи...")
             
             analysis = self.analyzer.analyze_with_audio_analysis(
                 outside_path, inside_path, test_name,
+                reference_text=reference_text,
                 enable_speech_recognition=bool(self.recognizer)
             )
             
@@ -1196,10 +1260,22 @@ class AdvancedSoundTester:
         try:
             overall = analysis.get('results', {}).get('overall_assessment', {})
             
-            result_text = "=" * 50 + "\n"
+            result_text = "=" * 60 + "\n"
             result_text += f"АНАЛИЗ ЗАПИСИ: {analysis.get('test_name', 'N/A')}\n"
             result_text += f"ВРЕМЯ: {analysis.get('timestamp', 'N/A')}\n"
-            result_text += "=" * 50 + "\n\n"
+            result_text += "=" * 60 + "\n\n"
+            
+            # Проверка текста (НОВОЕ)
+            text_validation = analysis.get('results', {}).get('text_validation', {})
+            if text_validation:
+                if text_validation.get('valid', False):
+                    result_text += "✅ ТЕКСТ ПРОВЕРЕН: Совпадает с заданным\n\n"
+                else:
+                    result_text += "❌ ВНИМАНИЕ: ТЕКСТ НЕ СОВПАДАЕТ!\n"
+                    result_text += "   Возможна спуфинг-атака (использование записанной речи)\n\n"
+                    result_text += f"   Заданный текст: '{text_validation.get('reference', 'N/A')}'\n"
+                    result_text += f"   Распознанный текст: '{text_validation.get('recognized', 'N/A')}'\n"
+                    result_text += f"   Совпадение: {text_validation.get('match_score', 0)*100:.1f}%\n\n"
             
             # Вердикт
             verdict = overall.get('verdict', 'N/A')
@@ -1226,6 +1302,21 @@ class AdvancedSoundTester:
                     result_text += f"  • Общая оценка: {composite.get('total_score', 0):.1f}/100\n"
                     result_text += f"  • Оценка: {composite.get('grade', 'N/A')}\n"
             
+            # Проверка спуфинга
+            spoof_check = analysis.get('results', {}).get('spoof_check', {})
+            if spoof_check:
+                result_text += "\n🔍 ПРОВЕРКА НА СПУФИНГ:\n"
+                if spoof_check.get('is_spoofing_suspected', False):
+                    result_text += "  ❌ ПОДОЗРЕНИЕ НА СПУФИНГ-АТАКУ!\n"
+                    result_text += f"  Тип атаки: {spoof_check.get('suspected_attack_type', 'неизвестно')}\n"
+                    result_text += f"  Уверенность: {spoof_check.get('confidence', 0)*100:.1f}%\n"
+                    if spoof_check.get('warnings'):
+                        result_text += "  Предупреждения:\n"
+                        for warning in spoof_check.get('warnings', []):
+                            result_text += f"    • {warning}\n"
+                else:
+                    result_text += "  ✅ Спуфинг-атаки не обнаружены\n"
+            
             # Рекомендации
             recommendations = overall.get('recommendations', [])
             if recommendations:
@@ -1233,7 +1324,7 @@ class AdvancedSoundTester:
                 for i, rec in enumerate(recommendations, 1):
                     result_text += f"  {i}. {rec}\n"
             
-            result_text += "\n" + "=" * 50
+            result_text += "\n" + "=" * 60
             
             # Отображаем в интерфейсе
             self.result_text.config(state=tk.NORMAL)
@@ -1267,7 +1358,8 @@ class AdvancedSoundTester:
                     rec.get('duration', 'N/A'),
                     rec.get('size', 'N/A'),
                     rec.get('status', 'N/A'),
-                    rec.get('engine', 'N/A')
+                    rec.get('engine', 'N/A'),
+                    rec.get('text_check', 'N/A')
                 ))
             
         except Exception as e:
@@ -1286,6 +1378,17 @@ class AdvancedSoundTester:
                         with open(metadata_path, 'r', encoding='utf-8') as f:
                             metadata = json.load(f)
                             
+                            # Определяем статус проверки текста
+                            text_check_status = "❓ Нет данных"
+                            analysis_file = os.path.join(self.recordings_folder, 
+                                                        f"{metadata.get('test_name', '')}_analysis.json")
+                            if os.path.exists(analysis_file):
+                                with open(analysis_file, 'r', encoding='utf-8') as af:
+                                    analysis_data = json.load(af)
+                                    text_val = analysis_data.get('results', {}).get('text_validation', {})
+                                    if text_val:
+                                        text_check_status = "✅ Проверен" if text_val.get('valid') else "❌ Не совпадает"
+                            
                             # Формируем информацию о записи
                             rec_info = {
                                 'test_name': metadata.get('test_name', file.replace('_metadata.json', '')),
@@ -1293,7 +1396,8 @@ class AdvancedSoundTester:
                                 'duration': f"{metadata.get('duration', 0):.1f} сек",
                                 'size': self._get_recording_size(metadata),
                                 'status': '✅' if metadata.get('analysis_ready', False) else '⚠️',
-                                'engine': 'N/A'
+                                'engine': metadata.get('analysis_engine', 'N/A'),
+                                'text_check': text_check_status
                             }
                             recordings.append(rec_info)
                             
@@ -1349,11 +1453,20 @@ class AdvancedSoundTester:
                 messagebox.showerror("Ошибка", "Файлы записи не найдены")
                 return
             
+            # Читаем метаданные для получения текста
+            reference_text = None
+            metadata_path = os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    reference_text = metadata.get('reference_text')
+            
             # Выполняем анализ
             self.status_var.set("📊 Анализ записи...")
             
             analysis = self.analyzer.analyze_with_audio_analysis(
                 outside_path, inside_path, test_name,
+                reference_text=reference_text,
                 enable_speech_recognition=bool(self.recognizer)
             )
             
@@ -1392,16 +1505,31 @@ class AdvancedSoundTester:
                 messagebox.showerror("Ошибка", "Файлы записи не найдены")
                 return
             
+            # Получаем эталонный текст
+            reference_text = None
+            metadata_path = os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
+            if os.path.exists(metadata_path):
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    reference_text = metadata.get('reference_text')
+            
             # Распознавание речи
             self.status_var.set("🎤 Распознавание речи...")
             
-            result = self.recognizer.analyze_pair(outside_path, inside_path)
+            result = self.recognizer.analyze_pair(outside_path, inside_path, reference_text)
+            
+            # Проверка текста
+            text_validation = self.analyzer._validate_spoken_text(
+                result.get('outside', {}).get('text', ''),
+                reference_text,
+                result.get('outside', {}).get('confidence', 0)
+            ) if reference_text else None
             
             # Отображаем результаты
-            result_text = "=" * 50 + "\n"
+            result_text = "=" * 60 + "\n"
             result_text += f"РАСПОЗНАВАНИЕ РЕЧИ: {test_name}\n"
             result_text += f"ДВИЖОК: {result.get('engine', 'N/A')}\n"
-            result_text += "=" * 50 + "\n\n"
+            result_text += "=" * 60 + "\n\n"
             
             # Текст снаружи
             outside = result.get('outside', {})
@@ -1417,6 +1545,17 @@ class AdvancedSoundTester:
             result_text += f"  Уверенность: {inside.get('confidence', 0):.2f}\n"
             result_text += f"  Слов: {inside.get('word_count', 0)}\n\n"
             
+            # Проверка текста
+            if text_validation:
+                result_text += "ПРОВЕРКА ТЕКСТА (защита от спуфинга):\n"
+                if text_validation.get('valid', False):
+                    result_text += "  ✅ Текст соответствует заданному\n"
+                else:
+                    result_text += "  ❌ Текст НЕ соответствует!\n"
+                    result_text += f"  Совпадение: {text_validation.get('match_score', 0)*100:.1f}%\n"
+                result_text += f"  Слов в эталоне: {len(text_validation.get('detailed', {}).get('ref_words', []))}\n"
+                result_text += f"  Слов распознано: {len(text_validation.get('detailed', {}).get('rec_words', []))}\n\n"
+            
             # Сравнение
             comparison = result.get('comparison', {})
             result_text += "СРАВНЕНИЕ:\n"
@@ -1430,7 +1569,7 @@ class AdvancedSoundTester:
             
             result_text += f"  Время обработки: {comparison.get('total_processing_time', 0):.1f} сек\n"
             
-            result_text += "\n" + "=" * 50
+            result_text += "\n" + "=" * 60
             
             # Отображаем в интерфейсе
             self.result_text.config(state=tk.NORMAL)
@@ -1442,6 +1581,78 @@ class AdvancedSoundTester:
             
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка распознавания: {e}")
+    
+    def check_spoofing(self):
+        """Проверка записи на спуфинг-атаки"""
+        try:
+            selection = self.recordings_tree.selection()
+            if not selection:
+                messagebox.showwarning("Предупреждение", "Выберите запись для проверки")
+                return
+            
+            # Получаем данные выбранной записи
+            item = self.recordings_tree.item(selection[0])
+            test_name = item['values'][0]
+            
+            # Находим файлы записи
+            outside_path = os.path.join(self.recordings_folder, f"{test_name}_outside.wav")
+            
+            if not os.path.exists(outside_path):
+                messagebox.showerror("Ошибка", "Файл записи не найден")
+                return
+            
+            # Проверяем спуфинг
+            from spoof_detector import SpoofingDetector
+            detector = SpoofingDetector()
+            
+            self.status_var.set("🛡️ Проверка на спуфинг...")
+            
+            spoof_result = detector.analyze_for_spoofing(outside_path)
+            
+            # Отображаем результаты
+            result_text = "=" * 60 + "\n"
+            result_text += f"ПРОВЕРКА НА СПУФИНГ-АТАКИ: {test_name}\n"
+            result_text += "=" * 60 + "\n\n"
+            
+            if spoof_result:
+                if spoof_result['is_spoofing_suspected']:
+                    result_text += "❌ ОБНАРУЖЕНА ВОЗМОЖНАЯ СПУФИНГ-АТАКА!\n\n"
+                    result_text += f"Тип атаки: {spoof_result['suspected_attack_type']}\n"
+                    result_text += f"Уверенность: {spoof_result['confidence']*100:.1f}%\n\n"
+                    
+                    result_text += "Метрики анализа:\n"
+                    for key, value in spoof_result['metrics'].items():
+                        result_text += f"  • {key}: {value:.3f}\n"
+                    
+                    result_text += "\nПредупреждения:\n"
+                    for warning in spoof_result['warnings']:
+                        result_text += f"  ⚠️ {warning}\n"
+                    
+                    result_text += "\n💡 Рекомендации:\n"
+                    result_text += "  • Проверьте источник звука\n"
+                    result_text += "  • Убедитесь, что используется живая речь\n"
+                    result_text += "  • Проверьте уровень громкости\n"
+                    result_text += "  • Исключите использование музыки или шума\n"
+                else:
+                    result_text += "✅ СПУФИНГ-АТАКИ НЕ ОБНАРУЖЕНЫ\n\n"
+                    result_text += "Метрики анализа:\n"
+                    for key, value in spoof_result['metrics'].items():
+                        result_text += f"  • {key}: {value:.3f}\n"
+            else:
+                result_text += "❌ Ошибка проверки спуфинга\n"
+            
+            result_text += "\n" + "=" * 60
+            
+            # Отображаем в интерфейсе
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.delete(1.0, tk.END)
+            self.result_text.insert(tk.END, result_text)
+            self.result_text.config(state=tk.DISABLED)
+            
+            self.status_var.set("✅ Проверка спуфинга завершена")
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка проверки спуфинга: {e}")
     
     def delete_recording(self):
         """Удалить выбранную запись"""
@@ -1468,7 +1679,8 @@ class AdvancedSoundTester:
             files_to_delete = [
                 os.path.join(self.recordings_folder, f"{test_name}_outside.wav"),
                 os.path.join(self.recordings_folder, f"{test_name}_inside.wav"),
-                os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
+                os.path.join(self.recordings_folder, f"{test_name}_metadata.json"),
+                os.path.join(self.recordings_folder, f"{test_name}_analysis.json")
             ]
             
             deleted_count = 0
@@ -1483,7 +1695,7 @@ class AdvancedSoundTester:
             # Обновляем список
             self.refresh_recordings_list()
             
-            messagebox.showinfo("Успех", f"Удалено записей: {deleted_count}/3")
+            messagebox.showinfo("Успех", f"Удалено записей: {deleted_count}/4")
             self.status_var.set("🗑️ Запись удалена")
             
         except Exception as e:
@@ -1611,9 +1823,11 @@ class AdvancedSoundTester:
         timestamp = metadata.get('timestamp', 'Нет данных')
         duration = metadata.get('duration', 0)
         sample_rate = metadata.get('sample_rate', 0)
+        reference_text = metadata.get('reference_text', 'Не задан')
         
         # Получаем результаты анализа если есть
         overall_score = "Н/Д"
+        text_validation = None
         if analysis_data:
             results = analysis_data.get('results', {})
             overall = results.get('overall_assessment', {})
@@ -1621,6 +1835,7 @@ class AdvancedSoundTester:
             grade = overall.get('grade', 'Н/Д')
             color = overall.get('color', 'black')
             recommendations = overall.get('recommendations', [])
+            text_validation = results.get('text_validation')
         
         # Создаем HTML документ
         html_content = f'''<!DOCTYPE html>
@@ -1858,12 +2073,35 @@ class AdvancedSoundTester:
             text-align: center;
             margin: 20px 0;
         }}
+        
+        .text-validation {{
+            background: #e8f4fd;
+            border-left: 5px solid #3498db;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }}
+        
+        .text-validation.success {{
+            background: #d4edda;
+            border-left: 5px solid #28a745;
+        }}
+        
+        .text-validation.warning {{
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+        }}
+        
+        .text-validation.danger {{
+            background: #f8d7da;
+            border-left: 5px solid #dc3545;
+        }}
     </style>
 </head>
 <body>
     <div class="header">
         <h1>📊 ОТЧЕТ ПО ТЕСТУ ЗВУКОИЗОЛЯЦИИ</h1>
-        <div class="subtitle">Дипломная работа - Sound Isolation Tester v3.13</div>
+        <div class="subtitle">Защита от спуфинг-атак - Sound Isolation Tester v3.14</div>
     </div>
     
     <div class="info-card">
@@ -1885,6 +2123,43 @@ class AdvancedSoundTester:
                 <div class="metric-label">Частота дискретизации</div>
                 <div class="metric-value">{sample_rate} Гц</div>
             </div>
+        </div>
+    </div>
+    
+    <div class="info-card">
+        <h2>🛡️ ПРОВЕРКА ЗАЩИТЫ ОТ СПУФИНГА</h2>
+        <div class="text-validation {'success' if text_validation and text_validation.get('valid') else 'danger' if text_validation else 'warning'}">
+            <h3>Проверка соответствия текста</h3>
+            <p><strong>Заданная фраза:</strong> "{reference_text}"</p>
+            '''
+        
+        if text_validation:
+            recognized_text = text_validation.get('recognized', 'Не распознано')
+            match_score = text_validation.get('match_score', 0) * 100
+            is_valid = text_validation.get('valid', False)
+            
+            if is_valid:
+                html_content += f'''
+                <p><strong>Результат:</strong> ✅ Текст успешно проверен</p>
+                <p><strong>Распознанный текст:</strong> "{recognized_text}"</p>
+                <p><strong>Совпадение:</strong> {match_score:.1f}%</p>
+                <p>✅ Система защищена от спуфинг-атак (текст соответствует)</p>
+                '''
+            else:
+                html_content += f'''
+                <p><strong>Результат:</strong> ❌ Текст не соответствует</p>
+                <p><strong>Распознанный текст:</strong> "{recognized_text}"</p>
+                <p><strong>Совпадение:</strong> {match_score:.1f}%</p>
+                <p>⚠️ <strong>ВНИМАНИЕ:</strong> Возможна спуфинг-атака!</p>
+                <p>Рекомендуется провести дополнительную проверку источника звука.</p>
+                '''
+        else:
+            html_content += '''
+                <p><strong>Результат:</strong> ⚠️ Проверка не выполнена</p>
+                <p>Для данной записи не выполнена проверка текста на соответствие.</p>
+                '''
+        
+        html_content += '''
         </div>
     </div>
     
@@ -2024,7 +2299,7 @@ class AdvancedSoundTester:
                 </tr>
                 <tr>
                     <td>Версия приложения</td>
-                    <td>Sound Isolation Tester v3.13</td>
+                    <td>Sound Isolation Tester v3.14 (защита от спуфинг-атак)</td>
                 </tr>
                 <tr>
                     <td>Операционная система</td>
@@ -2038,7 +2313,7 @@ class AdvancedSoundTester:
         </div>
         
         <div class="footer">
-            <p>© {datetime.now().year} - Дипломная работа "Разработка системы тестирования звукоизоляции"</p>
+            <p>© {datetime.now().year} - Дипломная работа "Разработка системы тестирования звукоизоляции с защитой от спуфинг-атак"</p>
             <p>Отчет сгенерирован автоматически. Для печати нажмите Ctrl+P</p>
             <p>Все данные конфиденциальны и предназначены только для академического использования</p>
         </div>
@@ -2097,6 +2372,7 @@ class AdvancedSoundTester:
                 ['Дата и время', metadata.get('timestamp', 'N/A')],
                 ['Длительность', f"{metadata.get('duration', 0):.1f} сек"],
                 ['Частота дискретизации', f"{metadata.get('sample_rate', 0)} Гц"],
+                ['Фраза для проверки', metadata.get('reference_text', 'Не задана')],
             ]
             
             for i, row in enumerate(data, start=3):
@@ -2109,10 +2385,30 @@ class AdvancedSoundTester:
             if analysis_data:
                 results = analysis_data.get('results', {})
                 overall = results.get('overall_assessment', {})
+                text_validation = results.get('text_validation', {})
+                
+                # Проверка текста
+                ws['A10'] = 'Проверка защиты от спуфинга'
+                ws['A10'].font = Font(bold=True)
+                
+                text_data = [
+                    ['Параметр', 'Значение'],
+                    ['Заданная фраза', metadata.get('reference_text', 'Не задана')],
+                    ['Распознанный текст', text_validation.get('recognized', 'Н/Д')],
+                    ['Совпадение', f"{text_validation.get('match_score', 0)*100:.1f}%"],
+                    ['Результат', '✅ Совпадает' if text_validation.get('valid') else '❌ Не совпадает'],
+                    ['Вывод', 'Защита от спуфинга активна' if text_validation.get('valid') else 'Возможна спуфинг-атака'],
+                ]
+                
+                for i, row in enumerate(text_data, start=11):
+                    for j, value in enumerate(row, start=1):
+                        cell = ws.cell(row=i, column=j)
+                        cell.value = value
+                        cell.border = border
                 
                 # Вердикт
-                ws['A8'] = 'Результаты анализа'
-                ws['A8'].font = Font(bold=True)
+                ws['A18'] = 'Результаты анализа'
+                ws['A18'].font = Font(bold=True)
                 
                 verdict_data = [
                     ['Вердикт', overall.get('verdict', 'Н/Д')],
@@ -2120,7 +2416,7 @@ class AdvancedSoundTester:
                     ['Общая оценка', f"{results.get('detailed_metrics', {}).get('composite_scores', {}).get('total_score', 0):.1f}/100"],
                 ]
                 
-                for i, row in enumerate(verdict_data, start=9):
+                for i, row in enumerate(verdict_data, start=19):
                     for j, value in enumerate(row, start=1):
                         cell = ws.cell(row=i, column=j)
                         cell.value = value
@@ -2128,7 +2424,7 @@ class AdvancedSoundTester:
             
             # Настраиваем ширину колонок
             for col in range(1, 7):
-                ws.column_dimensions[get_column_letter(col)].width = 20
+                ws.column_dimensions[get_column_letter(col)].width = 25
             
             # Сохраняем файл
             wb.save(filename)
@@ -2141,18 +2437,35 @@ class AdvancedSoundTester:
     
     def _create_text_report(self, metadata, analysis_data, filename):
         """Создать текстовый отчет"""
-        report = "=" * 60 + "\n"
-        report += "ОТЧЕТ О ТЕСТЕ ЗВУКОИЗОЛЯЦИИ\n"
-        report += "=" * 60 + "\n\n"
+        report = "=" * 70 + "\n"
+        report += "ОТЧЕТ О ТЕСТЕ ЗВУКОИЗОЛЯЦИИ (с защитой от спуфинг-атак)\n"
+        report += "=" * 70 + "\n\n"
         
         report += f"Имя теста: {metadata.get('test_name', 'N/A')}\n"
         report += f"Дата и время: {metadata.get('timestamp', 'N/A')}\n"
         report += f"Частота дискретизации: {metadata.get('sample_rate', 'N/A')} Гц\n"
-        report += f"Длительность: {metadata.get('duration', 0):.2f} сек\n\n"
+        report += f"Длительность: {metadata.get('duration', 0):.2f} сек\n"
+        report += f"Фраза для проверки: {metadata.get('reference_text', 'Не задана')}\n\n"
         
         if analysis_data:
             results = analysis_data.get('results', {})
             overall = results.get('overall_assessment', {})
+            text_validation = results.get('text_validation', {})
+            
+            report += "ПРОВЕРКА ЗАЩИТЫ ОТ СПУФИНГА:\n"
+            report += "-" * 40 + "\n"
+            if text_validation:
+                if text_validation.get('valid', False):
+                    report += "✅ Текст успешно проверен\n"
+                else:
+                    report += "❌ Текст НЕ соответствует!\n"
+                    report += "   ВНИМАНИЕ: Возможна спуфинг-атака!\n"
+                report += f"   Заданный текст: {text_validation.get('reference', 'N/A')}\n"
+                report += f"   Распознанный текст: {text_validation.get('recognized', 'N/A')}\n"
+                report += f"   Совпадение: {text_validation.get('match_score', 0)*100:.1f}%\n"
+            else:
+                report += "⚠️ Проверка текста не выполнена\n"
+            report += "\n"
             
             report += "РЕЗУЛЬТАТЫ АНАЛИЗА:\n"
             report += "-" * 40 + "\n"
@@ -2179,19 +2492,22 @@ class AdvancedSoundTester:
                 report += f"  Размер: {data.get('filesize_mb', 0):.2f} МБ\n"
                 report += f"  Сэмплов: {data.get('samples', 0):,}\n"
         
-        report += "\n" + "=" * 60 + "\n"
+        report += "\n" + "=" * 70 + "\n"
         report += "СИСТЕМНАЯ ИНФОРМАЦИЯ:\n"
         report += "-" * 40 + "\n"
         report += f"Дата создания отчета: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        report += f"Версия приложения: Sound Isolation Tester v3.13\n"
+        report += f"Версия приложения: Sound Isolation Tester v3.14 (защита от спуфинг-атак)\n"
         report += f"Операционная система: {sys.platform}\n"
         report += f"Версия Python: {sys.version.split()[0]}\n"
         
-        report += "\n" + "=" * 60 + "\n"
+        report += "\n" + "=" * 70 + "\n"
         report += "ПРИМЕЧАНИЕ:\n"
         report += "-" * 40 + "\n"
-        report += "Для более наглядного представления данных рекомендуется\n"
-        report += "создать HTML отчет с возможностью печати.\n"
+        report += "Для защиты от спуфинг-атек:\n"
+        report += "• Всегда используйте уникальные фразы для каждого теста\n"
+        report += "• Произносите фразу громко и четко\n"
+        report += "• Проверяйте соответствие распознанного текста заданному\n"
+        report += "• Анализируйте технические показатели на наличие аномалий\n"
         
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(report)
@@ -2531,11 +2847,25 @@ class AdvancedSoundTester:
             # Заголовки
             writer.writerow([
                 'test_name', 'timestamp', 'duration', 'sample_rate',
-                'outside_samples', 'inside_samples', 'analysis_ready'
+                'outside_samples', 'inside_samples', 'analysis_ready',
+                'reference_text', 'text_check_result'
             ])
             
             # Данные
             for rec in recordings:
+                # Получаем результат проверки текста
+                text_check = "Нет данных"
+                analysis_file = os.path.join("recordings", f"{rec.get('test_name', '')}_analysis.json")
+                if os.path.exists(analysis_file):
+                    try:
+                        with open(analysis_file, 'r', encoding='utf-8') as f:
+                            analysis = json.load(f)
+                            text_val = analysis.get('results', {}).get('text_validation', {})
+                            if text_val:
+                                text_check = "Совпадает" if text_val.get('valid') else "Не совпадает"
+                    except:
+                        pass
+                
                 writer.writerow([
                     rec.get('test_name', ''),
                     rec.get('timestamp', ''),
@@ -2543,7 +2873,9 @@ class AdvancedSoundTester:
                     rec.get('sample_rate', 0),
                     rec.get('files', {}).get('outside', {}).get('samples', 0),
                     rec.get('files', {}).get('inside', {}).get('samples', 0),
-                    'Да' if rec.get('analysis_ready', False) else 'Нет'
+                    'Да' if rec.get('analysis_ready', False) else 'Нет',
+                    rec.get('reference_text', 'Не задан'),
+                    text_check
                 ])
     
     def _export_to_json(self, recordings, filename):
@@ -2559,6 +2891,21 @@ class AdvancedSoundTester:
             # Преобразуем в DataFrame
             data = []
             for rec in recordings:
+                # Получаем результат проверки текста
+                text_check = "Нет данных"
+                text_match = 0
+                analysis_file = os.path.join("recordings", f"{rec.get('test_name', '')}_analysis.json")
+                if os.path.exists(analysis_file):
+                    try:
+                        with open(analysis_file, 'r', encoding='utf-8') as f:
+                            analysis = json.load(f)
+                            text_val = analysis.get('results', {}).get('text_validation', {})
+                            if text_val:
+                                text_check = "Совпадает" if text_val.get('valid') else "Не совпадает"
+                                text_match = text_val.get('match_score', 0) * 100
+                    except:
+                        pass
+                
                 data.append({
                     'test_name': rec.get('test_name', ''),
                     'timestamp': rec.get('timestamp', ''),
@@ -2566,7 +2913,10 @@ class AdvancedSoundTester:
                     'sample_rate': rec.get('sample_rate', 0),
                     'outside_samples': rec.get('files', {}).get('outside', {}).get('samples', 0),
                     'inside_samples': rec.get('files', {}).get('inside', {}).get('samples', 0),
-                    'analysis_ready': rec.get('analysis_ready', False)
+                    'analysis_ready': rec.get('analysis_ready', False),
+                    'reference_text': rec.get('reference_text', 'Не задан'),
+                    'text_check_result': text_check,
+                    'text_match_percent': text_match
                 })
             
             df = pd.DataFrame(data)
@@ -2603,16 +2953,20 @@ class AdvancedSoundTester:
             
             # Создаем README
             with open(readme_file, 'w', encoding='utf-8') as f:
-                f.write("ЭКСПОРТ ДАННЫХ ТЕСТЕРА ЗВУКОИЗОЛЯЦИИ\n")
-                f.write("=" * 50 + "\n\n")
+                f.write("ЭКСПОРТ ДАННЫХ ТЕСТЕРА ЗВУКОИЗОЛЯЦИИ (с защитой от спуфинга)\n")
+                f.write("=" * 70 + "\n\n")
                 f.write(f"Дата экспорта: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"Количество записей: {len(recordings)}\n\n")
                 f.write("ФАЙЛЫ:\n")
                 f.write("1. data.csv - данные в формате CSV\n")
                 f.write("2. data.json - данные в формате JSON\n")
                 f.write("3. data.xlsx - данные в формате Excel (если доступно)\n\n")
+                f.write("КОЛОНКИ ДЛЯ АНАЛИЗА ЗАЩИТЫ ОТ СПУФИНГА:\n")
+                f.write("• reference_text - заданная фраза для проверки\n")
+                f.write("• text_check_result - результат проверки текста\n")
+                f.write("• text_match_percent - процент совпадения текста\n\n")
                 f.write("ДЛЯ ИМПОРТА В ДИПЛОМНУЮ РАБОТУ:\n")
-                f.write("• Используйте Excel для графиков\n")
+                f.write("• Используйте Excel для графиков и анализа защиты от спуфинга\n")
                 f.write("• Используйте CSV для статистического анализа\n")
                 f.write("• Используйте JSON для программирования\n")
             
@@ -2645,7 +2999,8 @@ class AdvancedSoundTester:
         try:
             config = {
                 'last_engine': self.current_engine.value if self.current_engine else None,
-                'save_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                'save_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'app_version': '3.14'
             }
             
             with open("config.json", 'w', encoding='utf-8') as f:

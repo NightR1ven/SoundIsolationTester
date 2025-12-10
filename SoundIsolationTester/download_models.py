@@ -1,4 +1,4 @@
-﻿﻿#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Скачивание всех моделей для офлайн работы
@@ -126,6 +126,13 @@ def check_dependencies():
         "whisper": "pip install openai-whisper",
         "vosk": "pip install vosk",
         "librosa": "pip install librosa",
+        "pyaudio": "pip install pyaudio",
+        "numpy": "pip install numpy",
+        "scipy": "pip install scipy",
+        "pandas": "pip install pandas",
+        "matplotlib": "pip install matplotlib",
+        "seaborn": "pip install seaborn",
+        "openpyxl": "pip install openpyxl",
     }
     
     missing = []
@@ -142,7 +149,7 @@ def check_dependencies():
 
 def main():
     """Основная функция"""
-    print("🔧 УСТАНОВКА МОДЕЛЕЙ ДЛЯ ТЕСТЕРА ЗВУКОИЗОЛЯЦИИ")
+    print("🔧 УСТАНОВКА МОДЕЛЕЙ ДЛЯ ТЕСТЕРА ЗВУКОИЗОЛЯЦИИ v3.14")
     print("="*60)
     
     # Создаем структуру
@@ -163,6 +170,7 @@ def main():
     print("  models/whisper/    - Whisper модели (tiny, base, small, medium)")
     print("  models/vosk/       - Vosk модели (small-ru, large-ru)")
     print("\n🚀 Теперь можно работать полностью офлайн!")
+    print("🛡️  Система включает защиту от спуфинг-атак через проверку текста")
 
 if __name__ == "__main__":
     main()
