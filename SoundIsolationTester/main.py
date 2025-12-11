@@ -130,6 +130,14 @@ AudioCore = import_audio_core()
 EnhancedSoundIsolationAnalyzer = import_ai_analyzer()
 MultiEngineSpeechRecognizer, RecognitionEngine, SPEECH_RECOGNITION_AVAILABLE = import_speech_recognizer()
 
+# Пытаемся импортировать dataset_generator, если нет - выводим предупреждение
+try:
+    from dataset_generator import TestDatasetGenerator, AcousticCondition, create_diploma_dataset
+    DATASET_GENERATOR_AVAILABLE = True
+except ImportError:
+    DATASET_GENERATOR_AVAILABLE = False
+    print("⚠️ Модуль dataset_generator не найден")
+
 # Пытаемся импортировать polars, если нет - используем альтернативы
 try:
     import polars as pl
@@ -367,6 +375,11 @@ class AdvancedSoundTester:
             
             # Флаг истечения времени записи
             self.recording_timer_active = False
+
+            # Переменные для генерации датасета
+            self.scenario_vars = []
+            self.condition_frames = []
+            self.dataset_vars = {}
             
             print("✅ Приложение успешно инициализировано")
             
@@ -1141,54 +1154,40 @@ class AdvancedSoundTester:
             self.engine_combo.current(0)
     
     def setup_export_tab(self, parent):
-        """Вкладка экспорта"""
+        """Вкладка генерации тестового датасета (ЗАМЕНА ЭКСПОРТА)"""
+    
+        if not DATASET_GENERATOR_AVAILABLE:
+            ttk.Label(parent, text="❌ Модуль генерации датасета не найден", 
+                    font=('Arial', 12, 'bold')).pack(pady=50)
+            ttk.Label(parent, text="Создайте файл dataset_generator.py с кодом из предыдущего сообщения",
+                    wraplength=800).pack(pady=20)
+            return
+    
         # Заголовок
-        ttk.Label(parent, text="ЭКСПОРТ ДАННЫХ", 
-                 font=('Arial', 12, 'bold')).pack(pady=10)
-        
-        # Блок 1: Экспорт результатов
-        export_frame = ttk.LabelFrame(parent, text="Экспорт результатов", padding="10")
-        export_frame.pack(fill=tk.X, pady=10)
-        
-        # Форматы экспорта
-        formats_frame = ttk.Frame(export_frame)
-        formats_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(formats_frame, text="Формат:").pack(side=tk.LEFT, padx=5)
-        
-        self.export_format = tk.StringVar(value="csv")
-        formats = [("CSV", "csv"), ("JSON", "json"), ("Excel", "excel"), ("Все форматы", "all")]
-        
-        for text, value in formats:
-            ttk.Radiobutton(formats_frame, text=text, value=value, 
-                          variable=self.export_format).pack(side=tk.LEFT, padx=10)
-        
-        # Выбор записей
-        selection_frame = ttk.Frame(export_frame)
-        selection_frame.pack(fill=tk.X, pady=5)
-        
-        self.export_selection = tk.StringVar(value="all")
-        ttk.Radiobutton(selection_frame, text="Все записи", value="all",
-                       variable=self.export_selection).pack(side=tk.LEFT, padx=10)
-        ttk.Radiobutton(selection_frame, text="Только выбранные", value="selected",
-                       variable=self.export_selection).pack(side=tk.LEFT, padx=10)
-        ttk.Radiobutton(selection_frame, text="За последние 7 дней", value="week",
-                       variable=self.export_selection).pack(side=tk.LEFT, padx=10)
-        
-        # Кнопка экспорта
-        ttk.Button(export_frame, text="📁 Экспортировать данные", 
-                  command=self.export_data).pack(pady=10)
-        
-        # Блок 2: Системная информация
-        info_frame = ttk.LabelFrame(parent, text="Системная информация", padding="10")
-        info_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
-        self.system_info = scrolledtext.ScrolledText(info_frame, height=15, wrap=tk.WORD)
-        self.system_info.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Кнопка обновления информации
-        ttk.Button(info_frame, text="🔄 Обновить информацию", 
-                  command=self.update_system_info).pack(pady=5)
+        title_frame = ttk.Frame(parent)
+        title_frame.pack(fill=tk.X, pady=10)
+    
+        ttk.Label(title_frame, 
+            text="🧪 ГЕНЕРАЦИЯ ТЕСТОВОГО ДАТАСЕТА ДЛЯ ДИПЛОМА", 
+            font=('Arial', 14, 'bold')).pack()
+    
+        ttk.Label(title_frame, 
+            text="Создание речевых записей с имитацией акустической обстановки защищаемого помещения",
+            font=('Arial', 10)).pack(pady=5)
+    
+        # Вкладки
+        notebook = ttk.Notebook(parent)
+        notebook.pack(fill=tk.BOTH, expand=True, pady=10)
+    
+        # Вкладка 1: Быстрая генерация
+        quick_frame = ttk.Frame(notebook, padding="15")
+        notebook.add(quick_frame, text="🚀 БЫСТРАЯ ГЕНЕРАЦИЯ")
+        self.setup_quick_generation_tab(quick_frame)
+    
+        # Вкладка 2: Дипломный датасет
+        diploma_frame = ttk.Frame(notebook, padding="15")
+        notebook.add(diploma_frame, text="🎓 ДИПЛОМНЫЙ ДАТАСЕТ")
+        self.setup_diploma_dataset_tab(diploma_frame)
     
     def update_system_info(self):
         """Обновление информации о системе"""
@@ -3010,7 +3009,283 @@ class AdvancedSoundTester:
             
         except Exception as e:
             print(f"⚠️ Ошибка сохранения конфигурации: {e}")
+
+    def setup_quick_generation_tab(self, parent):
+        """Быстрая генерация датасета"""
     
+        # Описание
+        desc_text = """Быстро создайте тестовый датасет с предустановленными условиями.
+        Идеально для первичного тестирования и демонстрации."""
+    
+        ttk.Label(parent, text=desc_text, wraplength=700, justify=tk.LEFT).pack(pady=10)
+    
+        # Предустановленные сценарии
+        scenarios_frame = ttk.LabelFrame(parent, text="📋 ПРЕДУСТАНОВЛЕННЫЕ СЦЕНАРИИ", padding="10")
+        scenarios_frame.pack(fill=tk.X, pady=10)
+    
+        self.scenario_vars = []
+        scenarios = [
+            ("Тихая комната", "Низкий шум, хорошая акустика", True),
+            ("Офисное помещение", "Умеренный шум, разговоры на фоне", False),
+            ("Коридор с эхом", "Средний шум, реверберация", False),
+        ]
+    
+        for i, (name, desc, default) in enumerate(scenarios):
+            frame = ttk.Frame(scenarios_frame)
+            frame.pack(fill=tk.X, pady=2)
+        
+            var = tk.BooleanVar(value=default)
+            ttk.Checkbutton(frame, text=name, variable=var).pack(side=tk.LEFT, padx=5)
+            ttk.Label(frame, text=desc, foreground="gray").pack(side=tk.LEFT, padx=20)
+            self.scenario_vars.append((name, var))
+    
+        # Параметры генерации
+        params_frame = ttk.LabelFrame(parent, text="⚙️ ПАРАМЕТРЫ ГЕНЕРАЦИИ", padding="10")
+        params_frame.pack(fill=tk.X, pady=10)
+    
+        # Количество сэмплов
+        ttk.Label(params_frame, text="Сэмплов на сценарий:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.samples_per_scenario = tk.IntVar(value=10)
+        ttk.Spinbox(params_frame, from_=5, to=100, textvariable=self.samples_per_scenario, width=10).grid(row=0, column=1, padx=10, pady=5)
+    
+        # Имя датасета
+        ttk.Label(params_frame, text="Имя датасета:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.dataset_name_var = tk.StringVar(value=f"dataset_{datetime.now().strftime('%Y%m%d_%H%M')}")
+        ttk.Entry(params_frame, textvariable=self.dataset_name_var, width=30).grid(row=1, column=1, padx=10, pady=5)
+    
+        params_frame.columnconfigure(1, weight=1)
+    
+        # Кнопка генерации
+        btn_frame = ttk.Frame(parent)
+        btn_frame.pack(pady=20)
+    
+        ttk.Button(btn_frame, text="🚀 СГЕНЕРИРОВАТЬ ДАТАСЕТ", 
+                command=self.generate_quick_dataset, width=25,
+                style="Green.TButton").pack(pady=10)
+    
+        # Прогресс
+        self.progress_var = tk.StringVar(value="Готов к генерации")
+        ttk.Label(parent, textvariable=self.progress_var, foreground="blue").pack()
+
+    def setup_diploma_dataset_tab(self, parent):
+        """Предустановленный датасет для дипломной работы"""
+    
+        # Описание
+        desc_text = """🎓 Специально подготовленный датасет для дипломной работы.
+    Включает 2 различных акустических условий с 10 сэмплами каждое.
+    Идеально для сравнительного анализа и исследования."""
+    
+        ttk.Label(parent, text=desc_text, wraplength=700, justify=tk.LEFT).pack(pady=10)
+    
+        # Условия дипломного датасета
+        conditions_frame = ttk.LabelFrame(parent, text="📊 УСЛОВИЯ В ДАТАСЕТЕ", padding="10")
+        conditions_frame.pack(fill=tk.X, pady=10)
+    
+        conditions = [
+            ("1. Ideal Conditions", "Идеальные условия (эталон)", "Низкий шум, хорошая акустика"),
+            ("2. Quiet Office", "Тихий офис", "Умеренный шум, фоновая речь"),
+        ]
+    
+        for name, desc, params in conditions:
+            frame = ttk.Frame(conditions_frame)
+            frame.pack(fill=tk.X, pady=3)
+        
+            ttk.Label(frame, text=name, font=('Arial', 10, 'bold'), width=20).pack(side=tk.LEFT, padx=5)
+            ttk.Label(frame, text=desc, width=25).pack(side=tk.LEFT, padx=5)
+            ttk.Label(frame, text=params, foreground="green").pack(side=tk.LEFT, padx=5)
+    
+        # Статистика
+        stats_frame = ttk.LabelFrame(parent, text="📈 СТАТИСТИКА ДАТАСЕТА", padding="10")
+        stats_frame.pack(fill=tk.X, pady=10)
+    
+        stats = [
+            ("Всего сэмплов:", "20 (2 условия × 10 сэмплов)"),
+            ("Длительность:", "3-6 секунд каждый"),
+            ("Частота дискретизации:", "16 кГц (стандарт для распознавания)"),
+            ("Общий объем:", "≈ 10-20 МБ"),
+            ("Форматы:", "WAV аудио + CSV (UTF-8) + JSON"),
+            ("Кодировка CSV:", "UTF-8-BOM (открывается в Excel)")
+        ]
+    
+        for label, value in stats:
+            frame = ttk.Frame(stats_frame)
+            frame.pack(fill=tk.X, pady=2)
+            ttk.Label(frame, text=label, font=('Arial', 9, 'bold'), width=25).pack(side=tk.LEFT)
+            ttk.Label(frame, text=value).pack(side=tk.LEFT)
+    
+        # Кнопка генерации
+        btn_frame = ttk.Frame(parent)
+        btn_frame.pack(pady=20)
+    
+        ttk.Button(btn_frame, text="🎓 СГЕНЕРИРОВАТЬ ДИПЛОМНЫЙ ДАТАСЕТ", 
+                command=self.generate_diploma_dataset, width=30,
+                style="Green.TButton").pack()
+
+    def generate_quick_dataset(self):
+        """Быстрая генерация датасета"""
+        try:
+            # Собираем выбранные сценарии
+            selected_scenarios = []
+            for name, var in self.scenario_vars:
+                if var.get():
+                    selected_scenarios.append(name)
+        
+            if not selected_scenarios:
+                messagebox.showwarning("Предупреждение", "Выберите хотя бы один сценарий")
+                return
+        
+            # Параметры
+            samples_per = self.samples_per_scenario.get()
+            dataset_name = self.dataset_name_var.get()
+        
+            # Создаем условия на основе сценариев
+            from dataset_generator import AcousticCondition
+        
+            conditions = []
+            scenario_params = {
+                "Тихая комната": {
+                    'name': 'quiet_room',
+                    'noise': 0.02, 'reverb': 0.3, 'types': ['white'], 
+                    'room': (4, 5, 3), 'absorption': 0.8, 'distance': 1.0
+                },
+                "Офисное помещение": {
+                    'name': 'office',
+                    'noise': 0.08, 'reverb': 0.5, 'types': ['white', 'office'], 
+                    'room': (6, 8, 3), 'absorption': 0.6, 'distance': 1.5
+                },
+                "Коридор с эхом": {
+                    'name': 'corridor',
+                    'noise': 0.12, 'reverb': 1.2, 'types': ['pink'], 
+                    'room': (15, 3, 3), 'absorption': 0.3, 'distance': 2.0
+                },
+            }
+        
+            for scenario in selected_scenarios:
+                if scenario in scenario_params:
+                    params = scenario_params[scenario]
+                    condition = AcousticCondition(
+                        name=params['name'],  # Английское название
+                        description=f"Сценарий: {scenario}",
+                        background_noise_level=params['noise'],
+                        reverberation_time=params['reverb'],
+                        noise_types=params['types'],
+                        speech_level_variation=0.2,
+                        speech_speed_variation=0.1,
+                        room_size=params['room'],
+                        absorption_coefficient=params['absorption'],
+                        distance_to_microphone=params['distance']
+                    )
+                    conditions.append(condition)
+        
+            # Создаем генератор
+            from dataset_generator import TestDatasetGenerator
+            generator = TestDatasetGenerator(output_dir=dataset_name)
+        
+            # Запускаем в отдельном потоке с прогрессом
+            self.progress_var.set("🔄 Начинаю генерацию датасета...")
+        
+            threading.Thread(
+                target=self._generate_dataset_thread,
+                args=(generator, conditions, samples_per, "быстрый")
+            ).start()
+        
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка генерации: {e}")
+            import traceback
+            traceback.print_exc()
+            self.progress_var.set("❌ Ошибка генерации")
+
+    def generate_diploma_dataset(self):
+        """Генерация дипломного датасета"""
+        try:
+            confirm = messagebox.askyesno(
+                "Подтверждение",
+                "Сгенерировать дипломный датасет?\n\n"
+                "• 2 различных акустических условий\n"
+                "• 10 сэмплов на каждое условие\n"
+                "• Итого 20 аудиофайлов\n\n"
+                "Это может занять несколько секунд."
+            )
+        
+            if not confirm:
+                return
+        
+            self.status_var.set("🎓 Генерация дипломного датасета...")
+        
+            # Запускаем в отдельном потоке
+            threading.Thread(
+                target=self._generate_diploma_dataset_thread
+            ).start()
+        
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка генерации: {e}")
+
+    def _generate_dataset_thread(self, generator, conditions, samples_per, dataset_type):
+        """Поток генерации датасета"""
+        try:
+            # Генерируем датасет
+            dataset_info = generator.generate_dataset(
+                conditions=conditions,
+                num_samples_per_condition=samples_per,
+                sample_rate=16000,
+                duration_range=(3.0, 6.0)
+            )
+        
+            # Обновляем интерфейс
+            self.root.after(0, lambda: self._dataset_generation_complete(
+                dataset_info, dataset_type
+            ))
+        
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror(
+                "Ошибка",
+                f"Ошибка генерации датасета: {e}"
+            ))
+            self.root.after(0, lambda: self.progress_var.set("❌ Ошибка генерации"))
+
+    def _generate_diploma_dataset_thread(self):
+        """Поток генерации дипломного датасета"""
+        try:
+            from dataset_generator import create_diploma_dataset
+        
+            # Генерируем датасет
+            dataset_info = create_diploma_dataset()
+        
+            self.root.after(0, lambda: self._dataset_generation_complete(
+                dataset_info, "дипломный"
+            ))
+        
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror(
+                "Ошибка",
+                f"Ошибка генерации дипломного датасета: {e}"
+            ))
+
+    def _dataset_generation_complete(self, dataset_info, dataset_type):
+        """Завершение генерации датасета"""
+        try:
+            total_samples = len(dataset_info['samples'])
+            conditions = len(dataset_info['conditions'])
+        
+            messagebox.showinfo(
+                "✅ Успех",
+                f"{dataset_type.capitalize()} датасет успешно сгенерирован!\n\n"
+                f"📊 Статистика:\n"
+                f"• Условий: {conditions}\n"
+                f"• Сэмплов: {total_samples}\n"
+                f"• Папка: {dataset_info.get('output_dir', 'test_datasets')}/\n\n"
+                f"📁 Созданные файлы:\n"
+                f"• dataset_metadata.json\n"
+                f"• dataset_samples.csv\n"
+                f"• Папки с аудиофайлами"
+            )
+        
+            self.status_var.set(f"✅ Датасет создан: {total_samples} сэмплов")
+            self.progress_var.set(f"✅ Датасет создан")
+        
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка завершения: {e}")
+
     def on_closing(self):
         """Обработчик закрытия окна"""
         try:

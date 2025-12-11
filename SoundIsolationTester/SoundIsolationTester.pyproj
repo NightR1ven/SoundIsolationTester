@@ -18,6 +18,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ai_analyzer.py" />
+    <Compile Include="dataset_generator.py" />
     <Compile Include="download_models.py" />
     <Compile Include="experiment_manager.py" />
     <Compile Include="main.py" />
