@@ -40,7 +40,7 @@ class AudioCore:
             raise
     
     def _fix_mojibake(self, text):
-        """Исправление кракозябр (mojibake) - когда UTF-8 был прочитан как cp1251"""
+        """Исправление кодировщика (mojibake) - когда UTF-8 был прочитан как cp1251"""
         try:
             if not isinstance(text, str):
                 return text
@@ -48,14 +48,14 @@ class AudioCore:
             if 'Р' in text and 'С' in text and 'Р' in text:
                 try:
                     fixed = text.encode('cp1251').decode('utf-8')
-                    print(f"✅ Исправлены кракозябры: '{text}' -> '{fixed}'")
+                    print(f"✅ Исправлены кодировощик '{text}' -> '{fixed}'")
                     return fixed
                 except (UnicodeEncodeError, UnicodeDecodeError):
                     pass
                     
             return text
         except Exception as e:
-            print(f"⚠️ Ошибка исправления кракозябр: {e}")
+            print(f"⚠️ Ошибка исправления кодировщика: {e}")
             return text
     
     def _decode_device_name(self, name):

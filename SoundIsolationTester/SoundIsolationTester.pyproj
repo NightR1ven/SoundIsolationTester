@@ -110,8 +110,6 @@
   <ItemGroup>
     <Folder Include="dataset\" />
     <Folder Include="models\" />
-    <Folder Include="models\silero\" />
-    <Folder Include="models\temp\" />
     <Folder Include="models\vosk\" />
     <Folder Include="models\vosk\large-ru\" />
     <Folder Include="models\vosk\large-ru\am\" />

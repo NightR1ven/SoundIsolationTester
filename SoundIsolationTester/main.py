@@ -329,7 +329,7 @@ class RecordingIndicator(tk.Canvas):
 class AdvancedSoundTester:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sound Isolation Tester v3.14 - Защита от спуфинг-атак")
+        self.root.title("Sound Isolation Tester")
         self.root.geometry("1200x950")  # Увеличили высоту
         
         self.center_window()
@@ -426,7 +426,7 @@ class AdvancedSoundTester:
         
         # Заголовок
         title = ttk.Label(main_frame, 
-            text="🧪 ТЕСТЕР ЗВУКОИЗОЛЯЦИИ v3.14 - Защита от спуфинг-атак",
+            text="🧪 ТЕСТЕР ЗВУКОИЗОЛЯЦИИ",
             font=('Arial', 14, 'bold'))
         title.pack(pady=10)
         
@@ -449,9 +449,9 @@ class AdvancedSoundTester:
         notebook.add(engine_frame, text="⚙️ ДВИЖКИ")
         self.setup_engine_tab(engine_frame)
         
-        # Вкладка 4: Экспорт
+        # Вкладка 4: Генерация дата сета
         export_frame = ttk.Frame(notebook, padding="10")
-        notebook.add(export_frame, text="📁 ЭКСПОРТ")
+        notebook.add(export_frame, text="📁 ДАТАСЕТ")
         self.setup_export_tab(export_frame)
         
         # Статус
@@ -1047,7 +1047,7 @@ class AdvancedSoundTester:
         desc_frame = ttk.LabelFrame(parent, text="Доступные офлайн модели", padding="10")
         desc_frame.pack(fill=tk.X, pady=10)
         
-        descriptions = """Для дипломной работы рекомендуется использовать 2 модели:
+        descriptions = """
 
 1. 🎯 Whisper Small (оптимальная) - 500 МБ
    • Международная модель OpenAI
@@ -1138,10 +1138,10 @@ class AdvancedSoundTester:
             for model in missing:
                 result += f"  • {model}\n"
         
-        result += f"\n📊 Всего: {len(available)} из 2 моделей для диплома\n"
+        result += f"\n📊 Всего: {len(available)} из 2 моделей\n"
         
         if len(available) >= 2:
-            result += "🎉 Все модели для диплома готовы!"
+            result += "🎉 Все модели готовы!"
         else:
             result += "⚠️ Загрузите недостающие модели через 'Загрузить модели'"
         
@@ -1154,7 +1154,7 @@ class AdvancedSoundTester:
             self.engine_combo.current(0)
     
     def setup_export_tab(self, parent):
-        """Вкладка генерации тестового датасета (ЗАМЕНА ЭКСПОРТА)"""
+        """Вкладка генерации тестового датасета"""
     
         if not DATASET_GENERATOR_AVAILABLE:
             ttk.Label(parent, text="❌ Модуль генерации датасета не найден", 
@@ -1168,7 +1168,7 @@ class AdvancedSoundTester:
         title_frame.pack(fill=tk.X, pady=10)
     
         ttk.Label(title_frame, 
-            text="🧪 ГЕНЕРАЦИЯ ТЕСТОВОГО ДАТАСЕТА ДЛЯ ДИПЛОМА", 
+            text="ГЕНЕРАЦИЯ ТЕСТОВОГО ДАТАСЕТА", 
             font=('Arial', 14, 'bold')).pack()
     
         ttk.Label(title_frame, 
@@ -1184,9 +1184,9 @@ class AdvancedSoundTester:
         notebook.add(quick_frame, text="🚀 БЫСТРАЯ ГЕНЕРАЦИЯ")
         self.setup_quick_generation_tab(quick_frame)
     
-        # Вкладка 2: Дипломный датасет
+        # Вкладка 2: Тестовый датасет
         diploma_frame = ttk.Frame(notebook, padding="15")
-        notebook.add(diploma_frame, text="🎓 ДИПЛОМНЫЙ ДАТАСЕТ")
+        notebook.add(diploma_frame, text="ТЕСТОВЫЙ ДАТАСЕТ")
         self.setup_diploma_dataset_tab(diploma_frame)
     
     def update_system_info(self):
@@ -1226,7 +1226,7 @@ class AdvancedSoundTester:
         info += f"\n📊 Всего моделей: {models_found}/2\n"
     
         if models_found >= 2:
-            info += "✅ Все модели для диплома готовы!"
+            info += "✅ Все модели готовы!"
         else:
             info += "⚠️ Загрузите недостающие модели!"
     
@@ -2312,7 +2312,6 @@ class AdvancedSoundTester:
         </div>
         
         <div class="footer">
-            <p>© {datetime.now().year} - Дипломная работа "Разработка системы тестирования звукоизоляции с защитой от спуфинг-атак"</p>
             <p>Отчет сгенерирован автоматически. Для печати нажмите Ctrl+P</p>
             <p>Все данные конфиденциальны и предназначены только для академического использования</p>
         </div>
@@ -2334,105 +2333,6 @@ class AdvancedSoundTester:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
     
-    def _create_excel_report(self, metadata, analysis_data, filename):
-        """Создать Excel отчет"""
-        try:
-            import pandas as pd
-            from openpyxl import Workbook
-            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-            from openpyxl.utils import get_column_letter
-            
-            # Создаем рабочую книгу
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Отчет звукоизоляции"
-            
-            # Стили
-            header_font = Font(name='Arial', size=12, bold=True, color='FFFFFF')
-            header_fill = PatternFill(start_color='2C3E50', end_color='2C3E50', fill_type='solid')
-            title_font = Font(name='Arial', size=14, bold=True, color='2C3E50')
-            border = Border(left=Side(style='thin'), right=Side(style='thin'),
-                           top=Side(style='thin'), bottom=Side(style='thin'))
-            center_align = Alignment(horizontal='center', vertical='center')
-            
-            # Заголовок
-            ws.merge_cells('A1:F1')
-            ws['A1'] = f'ОТЧЕТ ПО ТЕСТУ ЗВУКОИЗОЛЯЦИИ - {metadata.get("test_name", "N/A")}'
-            ws['A1'].font = title_font
-            ws['A1'].alignment = center_align
-            
-            # Основная информация
-            ws['A3'] = 'Основная информация'
-            ws['A3'].font = Font(bold=True)
-            
-            data = [
-                ['Параметр', 'Значение'],
-                ['Название теста', metadata.get('test_name', 'N/A')],
-                ['Дата и время', metadata.get('timestamp', 'N/A')],
-                ['Длительность', f"{metadata.get('duration', 0):.1f} сек"],
-                ['Частота дискретизации', f"{metadata.get('sample_rate', 0)} Гц"],
-                ['Фраза для проверки', metadata.get('reference_text', 'Не задана')],
-            ]
-            
-            for i, row in enumerate(data, start=3):
-                for j, value in enumerate(row, start=1):
-                    cell = ws.cell(row=i, column=j)
-                    cell.value = value
-                    cell.border = border
-            
-            # Если есть результаты анализа
-            if analysis_data:
-                results = analysis_data.get('results', {})
-                overall = results.get('overall_assessment', {})
-                text_validation = results.get('text_validation', {})
-                
-                # Проверка текста
-                ws['A10'] = 'Проверка защиты от спуфинга'
-                ws['A10'].font = Font(bold=True)
-                
-                text_data = [
-                    ['Параметр', 'Значение'],
-                    ['Заданная фраза', metadata.get('reference_text', 'Не задана')],
-                    ['Распознанный текст', text_validation.get('recognized', 'Н/Д')],
-                    ['Совпадение', f"{text_validation.get('match_score', 0)*100:.1f}%"],
-                    ['Результат', '✅ Совпадает' if text_validation.get('valid') else '❌ Не совпадает'],
-                    ['Вывод', 'Защита от спуфинга активна' if text_validation.get('valid') else 'Возможна спуфинг-атака'],
-                ]
-                
-                for i, row in enumerate(text_data, start=11):
-                    for j, value in enumerate(row, start=1):
-                        cell = ws.cell(row=i, column=j)
-                        cell.value = value
-                        cell.border = border
-                
-                # Вердикт
-                ws['A18'] = 'Результаты анализа'
-                ws['A18'].font = Font(bold=True)
-                
-                verdict_data = [
-                    ['Вердикт', overall.get('verdict', 'Н/Д')],
-                    ['Оценка', overall.get('grade', 'Н/Д')],
-                    ['Общая оценка', f"{results.get('detailed_metrics', {}).get('composite_scores', {}).get('total_score', 0):.1f}/100"],
-                ]
-                
-                for i, row in enumerate(verdict_data, start=19):
-                    for j, value in enumerate(row, start=1):
-                        cell = ws.cell(row=i, column=j)
-                        cell.value = value
-                        cell.border = border
-            
-            # Настраиваем ширину колонок
-            for col in range(1, 7):
-                ws.column_dimensions[get_column_letter(col)].width = 25
-            
-            # Сохраняем файл
-            wb.save(filename)
-            
-        except ImportError:
-            messagebox.showerror("Ошибка", 
-                "Для создания Excel отчета установите:\n"
-                "pip install pandas openpyxl")
-            raise
     
     def _create_text_report(self, metadata, analysis_data, filename):
         """Создать текстовый отчет"""
@@ -2747,234 +2647,6 @@ class AdvancedSoundTester:
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка теста распознавания: {e}")
     
-    def export_data(self):
-        """Экспорт данных"""
-        try:
-            # Получаем список записей для экспорта
-            recordings = self._get_recordings_for_export()
-            
-            if not recordings:
-                messagebox.showwarning("Предупреждение", "Нет данных для экспорта")
-                return
-            
-            # Запрашиваем место сохранения
-            format_type = self.export_format.get()
-            
-            if format_type == "csv":
-                ext = ".csv"
-                filetypes = [("CSV файлы", "*.csv")]
-            elif format_type == "json":
-                ext = ".json"
-                filetypes = [("JSON файлы", "*.json")]
-            elif format_type == "excel":
-                ext = ".xlsx"
-                filetypes = [("Excel файлы", "*.xlsx")]
-            else:  # all
-                ext = ".zip"
-                filetypes = [("ZIP архив", "*.zip")]
-            
-            filename = filedialog.asksaveasfilename(
-                defaultextension=ext,
-                filetypes=filetypes,
-                initialfile=f"sound_isolation_export{ext}"
-            )
-            
-            if not filename:
-                return
-            
-            # Экспортируем данные
-            self._perform_export(recordings, filename, format_type)
-            
-            messagebox.showinfo("Успех", f"Данные экспортированы:\n{filename}")
-            self.status_var.set("📁 Данные экспортированы")
-            
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка экспорта: {e}")
-    
-    def _get_recordings_for_export(self):
-        """Получить записи для экспорта"""
-        recordings = []
-        selection_type = self.export_selection.get()
-        
-        try:
-            # Сканируем папку recordings
-            for file in os.listdir(self.recordings_folder):
-                if file.endswith('_metadata.json'):
-                    metadata_path = os.path.join(self.recordings_folder, file)
-                    try:
-                        with open(metadata_path, 'r', encoding='utf-8') as f:
-                            metadata = json.load(f)
-                            
-                            # Проверяем фильтр по времени
-                            if selection_type == "week":
-                                timestamp = metadata.get('timestamp', '')
-                                if timestamp:
-                                    try:
-                                        record_date = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
-                                        week_ago = datetime.now() - timedelta(days=7)
-                                        if record_date < week_ago:
-                                            continue
-                                    except:
-                                        pass
-                            
-                            recordings.append(metadata)
-                            
-                    except Exception as e:
-                        print(f"Ошибка чтения {file}: {e}")
-            
-        except Exception as e:
-            print(f"Ошибка получения записей: {e}")
-        
-        return recordings
-    
-    def _perform_export(self, recordings, filename, format_type):
-        """Выполнить экспорт данных"""
-        if format_type == "csv":
-            self._export_to_csv(recordings, filename)
-        elif format_type == "json":
-            self._export_to_json(recordings, filename)
-        elif format_type == "excel":
-            self._export_to_excel(recordings, filename)
-        elif format_type == "all":
-            self._export_all_formats(recordings, filename)
-    
-    def _export_to_csv(self, recordings, filename):
-        """Экспорт в CSV"""
-        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.writer(csvfile)
-            
-            # Заголовки
-            writer.writerow([
-                'test_name', 'timestamp', 'duration', 'sample_rate',
-                'outside_samples', 'inside_samples', 'analysis_ready',
-                'reference_text', 'text_check_result'
-            ])
-            
-            # Данные
-            for rec in recordings:
-                # Получаем результат проверки текста
-                text_check = "Нет данных"
-                analysis_file = os.path.join("recordings", f"{rec.get('test_name', '')}_analysis.json")
-                if os.path.exists(analysis_file):
-                    try:
-                        with open(analysis_file, 'r', encoding='utf-8') as f:
-                            analysis = json.load(f)
-                            text_val = analysis.get('results', {}).get('text_validation', {})
-                            if text_val:
-                                text_check = "Совпадает" if text_val.get('valid') else "Не совпадает"
-                    except:
-                        pass
-                
-                writer.writerow([
-                    rec.get('test_name', ''),
-                    rec.get('timestamp', ''),
-                    rec.get('duration', 0),
-                    rec.get('sample_rate', 0),
-                    rec.get('files', {}).get('outside', {}).get('samples', 0),
-                    rec.get('files', {}).get('inside', {}).get('samples', 0),
-                    'Да' if rec.get('analysis_ready', False) else 'Нет',
-                    rec.get('reference_text', 'Не задан'),
-                    text_check
-                ])
-    
-    def _export_to_json(self, recordings, filename):
-        """Экспорт в JSON"""
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(recordings, f, ensure_ascii=False, indent=2)
-    
-    def _export_to_excel(self, recordings, filename):
-        """Экспорт в Excel"""
-        try:
-            import pandas as pd
-            
-            # Преобразуем в DataFrame
-            data = []
-            for rec in recordings:
-                # Получаем результат проверки текста
-                text_check = "Нет данных"
-                text_match = 0
-                analysis_file = os.path.join("recordings", f"{rec.get('test_name', '')}_analysis.json")
-                if os.path.exists(analysis_file):
-                    try:
-                        with open(analysis_file, 'r', encoding='utf-8') as f:
-                            analysis = json.load(f)
-                            text_val = analysis.get('results', {}).get('text_validation', {})
-                            if text_val:
-                                text_check = "Совпадает" if text_val.get('valid') else "Не совпадает"
-                                text_match = text_val.get('match_score', 0) * 100
-                    except:
-                        pass
-                
-                data.append({
-                    'test_name': rec.get('test_name', ''),
-                    'timestamp': rec.get('timestamp', ''),
-                    'duration': rec.get('duration', 0),
-                    'sample_rate': rec.get('sample_rate', 0),
-                    'outside_samples': rec.get('files', {}).get('outside', {}).get('samples', 0),
-                    'inside_samples': rec.get('files', {}).get('inside', {}).get('samples', 0),
-                    'analysis_ready': rec.get('analysis_ready', False),
-                    'reference_text': rec.get('reference_text', 'Не задан'),
-                    'text_check_result': text_check,
-                    'text_match_percent': text_match
-                })
-            
-            df = pd.DataFrame(data)
-            df.to_excel(filename, index=False)
-            
-        except ImportError:
-            messagebox.showerror("Ошибка", 
-                "Для экспорта в Excel установите pandas:\n"
-                "pip install pandas openpyxl")
-    
-    def _export_all_formats(self, recordings, filename):
-        """Экспорт во всех форматах"""
-        import zipfile
-        import tempfile
-        import os
-        
-        # Создаем временную папку
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Экспортируем во все форматы
-            csv_file = os.path.join(temp_dir, "data.csv")
-            json_file = os.path.join(temp_dir, "data.json")
-            excel_file = os.path.join(temp_dir, "data.xlsx")
-            readme_file = os.path.join(temp_dir, "README.txt")
-            
-            self._export_to_csv(recordings, csv_file)
-            self._export_to_json(recordings, json_file)
-            
-            try:
-                self._export_to_excel(recordings, excel_file)
-            except:
-                # Если Excel не доступен, создаем заглушку
-                with open(excel_file, 'w') as f:
-                    f.write("Excel export requires pandas and openpyxl\n")
-            
-            # Создаем README
-            with open(readme_file, 'w', encoding='utf-8') as f:
-                f.write("ЭКСПОРТ ДАННЫХ ТЕСТЕРА ЗВУКОИЗОЛЯЦИИ (с защитой от спуфинга)\n")
-                f.write("=" * 70 + "\n\n")
-                f.write(f"Дата экспорта: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Количество записей: {len(recordings)}\n\n")
-                f.write("ФАЙЛЫ:\n")
-                f.write("1. data.csv - данные в формате CSV\n")
-                f.write("2. data.json - данные в формате JSON\n")
-                f.write("3. data.xlsx - данные в формате Excel (если доступно)\n\n")
-                f.write("КОЛОНКИ ДЛЯ АНАЛИЗА ЗАЩИТЫ ОТ СПУФИНГА:\n")
-                f.write("• reference_text - заданная фраза для проверки\n")
-                f.write("• text_check_result - результат проверки текста\n")
-                f.write("• text_match_percent - процент совпадения текста\n\n")
-                f.write("ДЛЯ ИМПОРТА В ДИПЛОМНУЮ РАБОТУ:\n")
-                f.write("• Используйте Excel для графиков и анализа защиты от спуфинга\n")
-                f.write("• Используйте CSV для статистического анализа\n")
-                f.write("• Используйте JSON для программирования\n")
-            
-            # Создаем ZIP архив
-            with zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for file in [csv_file, json_file, excel_file, readme_file]:
-                    if os.path.exists(file):
-                        zipf.write(file, os.path.basename(file))
-    
     def load_config(self):
         """Загрузить конфигурацию"""
         try:
@@ -3068,16 +2740,16 @@ class AdvancedSoundTester:
         ttk.Label(parent, textvariable=self.progress_var, foreground="blue").pack()
 
     def setup_diploma_dataset_tab(self, parent):
-        """Предустановленный датасет для дипломной работы"""
+        """Предустановленный датасет для тестирования"""
     
         # Описание
-        desc_text = """🎓 Специально подготовленный датасет для дипломной работы.
+        desc_text = """🎓 Специально подготовленный датасет для тестирования.
     Включает 2 различных акустических условий с 10 сэмплами каждое.
     Идеально для сравнительного анализа и исследования."""
     
         ttk.Label(parent, text=desc_text, wraplength=700, justify=tk.LEFT).pack(pady=10)
     
-        # Условия дипломного датасета
+        # Условия тестого датасета
         conditions_frame = ttk.LabelFrame(parent, text="📊 УСЛОВИЯ В ДАТАСЕТЕ", padding="10")
         conditions_frame.pack(fill=tk.X, pady=10)
     
@@ -3117,7 +2789,7 @@ class AdvancedSoundTester:
         btn_frame = ttk.Frame(parent)
         btn_frame.pack(pady=20)
     
-        ttk.Button(btn_frame, text="🎓 СГЕНЕРИРОВАТЬ ДИПЛОМНЫЙ ДАТАСЕТ", 
+        ttk.Button(btn_frame, text="СГЕНЕРИРОВАТЬ ТЕСТОВЫЙ ДАТАСЕТ", 
                 command=self.generate_diploma_dataset, width=30,
                 style="Green.TButton").pack()
 
@@ -3196,11 +2868,11 @@ class AdvancedSoundTester:
             self.progress_var.set("❌ Ошибка генерации")
 
     def generate_diploma_dataset(self):
-        """Генерация дипломного датасета"""
+        """Генерация тестого датасета"""
         try:
             confirm = messagebox.askyesno(
                 "Подтверждение",
-                "Сгенерировать дипломный датасет?\n\n"
+                "Сгенерировать тестовый датасет?\n\n"
                 "• 2 различных акустических условий\n"
                 "• 10 сэмплов на каждое условие\n"
                 "• Итого 20 аудиофайлов\n\n"
@@ -3210,7 +2882,7 @@ class AdvancedSoundTester:
             if not confirm:
                 return
         
-            self.status_var.set("🎓 Генерация дипломного датасета...")
+            self.status_var.set("Генерация тестового датасета...")
         
             # Запускаем в отдельном потоке
             threading.Thread(
@@ -3244,7 +2916,7 @@ class AdvancedSoundTester:
             self.root.after(0, lambda: self.progress_var.set("❌ Ошибка генерации"))
 
     def _generate_diploma_dataset_thread(self):
-        """Поток генерации дипломного датасета"""
+        """Поток генерации тестового датасета"""
         try:
             from dataset_generator import create_diploma_dataset
         
@@ -3252,13 +2924,13 @@ class AdvancedSoundTester:
             dataset_info = create_diploma_dataset()
         
             self.root.after(0, lambda: self._dataset_generation_complete(
-                dataset_info, "дипломный"
+                dataset_info, "тестовый"
             ))
         
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror(
                 "Ошибка",
-                f"Ошибка генерации дипломного датасета: {e}"
+                f"Ошибка генерации тестового датасета: {e}"
             ))
 
     def _dataset_generation_complete(self, dataset_info, dataset_type):
