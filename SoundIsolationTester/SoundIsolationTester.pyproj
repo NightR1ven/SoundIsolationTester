@@ -24,7 +24,6 @@
     <Compile Include="main.py" />
     <Compile Include="audio_core.py" />
     <Compile Include="models\vosk\large-ru\decode.py" />
-    <Compile Include="speech_engine.py" />
     <Compile Include="speech_recognizer.py" />
     <Compile Include="spoof_detector.py" />
     <Compile Include="test_audio.py" />

@@ -4,166 +4,305 @@ import json
 from datetime import datetime
 import numpy as np
 from difflib import SequenceMatcher
+import re
 
 class EnhancedSoundIsolationAnalyzer:
-    """Анализатор звукоизоляции с расширенными метриками"""
+    """Анализатор звукоизоляции для аттестации помещений"""
     
     def __init__(self):
         self.initialized = False
         
-        # Пытаемся загрузить библиотеки
         try:
             import numpy as np
             self.np = np
             print("✅ NumPy загружен")
             self.initialized = True
-        except ImportError:
-            print("⚠️ NumPy не установлен, базовый анализ")
+        except ImportError as e:
+            print(f"⚠️ NumPy не установлен: {e}")
+            self.np = None
         
         # Инициализация распознавателя (если доступен)
         self.recognizer = None
         try:
-            from speech_recognizer import MultiEngineSpeechRecognizer, RecognitionEngine
+            from speech_recognizer import MultiEngineSpeechRecognizer
             self.recognizer = MultiEngineSpeechRecognizer()
             print("✅ Модуль распознавания загружен")
-        except ImportError:
-            print("⚠️ Модуль распознавания недоступен")
+        except ImportError as e:
+            print(f"⚠️ Модуль распознавания недоступен: {e}")
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки распознавателя: {e}")
     
     def analyze_with_audio_analysis(self, outside_audio_path, inside_audio_path, test_name, 
-                                   reference_text=None, enable_speech_recognition=True):
-        """Анализ аудио с распознаванием речи"""
+                               reference_text=None, enable_speech_recognition=True):
+        """Анализ для аттестации звукоизоляции помещения"""
         try:
             analysis = {
                 'test_name': test_name,
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'analysis_type': 'advanced_analysis',
+                'analysis_type': 'room_isolation_assessment',
+                'reference_text': reference_text,
+                'file_paths': {
+                    'inside': inside_audio_path,
+                    'outside': outside_audio_path
+                },
                 'results': {
                     'audio_analysis': {},
                     'speech_recognition': {},
                     'detailed_metrics': {},
                     'overall_assessment': {},
-                    'text_validation': {}  # НОВОЕ: проверка текста
+                    'isolation_assessment': {}
                 }
             }
-            
-            # 1. Базовый анализ аудио
+        
+            # 1. Базовый анализ аудио (громкость)
+            print(f"🔊 Начинаю аудиоанализ...")
             audio_analysis = self._perform_audio_analysis(outside_audio_path, inside_audio_path)
             analysis['results']['audio_analysis'] = audio_analysis
-            
+            print(f"✅ Аудиоанализ завершен")
+        
             # 2. Распознавание речи (если включено и доступно)
             if enable_speech_recognition and self.recognizer:
-                speech_analysis = self._perform_speech_recognition(
-                    outside_audio_path, inside_audio_path, reference_text
-                )
-                analysis['results']['speech_recognition'] = speech_analysis
-                
-                # 3. ПРОВЕРКА ТЕКСТА (НОВОЕ)
-                if reference_text:
-                    recognized_text = speech_analysis.get('outside', {}).get('text', '')
-                    confidence = speech_analysis.get('outside', {}).get('confidence', 0)
-                    
-                    text_validation = self._validate_spoken_text(
-                        recognized_text, reference_text, confidence
+                print(f"🎤 Начинаю распознавание речи...")
+                try:
+                    speech_analysis = self._perform_speech_recognition(
+                        outside_audio_path, inside_audio_path, reference_text
                     )
-                    analysis['results']['text_validation'] = text_validation
+                    analysis['results']['speech_recognition'] = speech_analysis
+                    print(f"✅ Распознавание речи завершено")
                 
-                # 4. Интегрируем результаты
-                integrated = self._integrate_analyses(audio_analysis, speech_analysis, 
-                                                     analysis['results'].get('text_validation'))
-                analysis['results']['detailed_metrics'] = integrated
+                    # 3. Оценка изоляции помещения
+                    if reference_text:
+                        print(f"📊 Оцениваю изоляцию помещения...")
+                        isolation_assessment = self._assess_room_isolation(
+                            speech_analysis, reference_text, audio_analysis
+                        )
+                        analysis['results']['isolation_assessment'] = isolation_assessment
+                        print(f"✅ Оценка изоляции завершена")
+                    
+                    # 4. Интегрируем результаты
+                    integrated = self._integrate_analyses(
+                        audio_analysis, speech_analysis, 
+                        analysis['results'].get('isolation_assessment')
+                    )
+                    analysis['results']['detailed_metrics'] = integrated
+                    
+                except Exception as e:
+                    print(f"⚠️ Ошибка при распознавании речи: {e}")
+                    # Если распознавание не удалось, используем только аудиоанализ
+                    analysis['results']['detailed_metrics'] = self._create_basic_metrics(audio_analysis)
             else:
+                print(f"ℹ️ Распознавание речи отключено или недоступно")
                 analysis['results']['detailed_metrics'] = self._create_basic_metrics(audio_analysis)
-            
+        
             # 5. Итоговая оценка
+            print(f"🏆 Формирую итоговую оценку...")
             overall = self._calculate_overall_assessment(
                 analysis['results']['detailed_metrics'],
-                analysis['results'].get('text_validation')
+                analysis['results'].get('isolation_assessment')
             )
             analysis['results']['overall_assessment'] = overall
-            
+            print(f"✅ Анализ завершен успешно")
+        
             return analysis
-            
+        
         except Exception as e:
-            print(f"❌ Ошибка анализа: {e}")
+            print(f"❌ Критическая ошибка анализа: {e}")
+            import traceback
+            traceback.print_exc()
             return self._create_error_report(test_name, str(e))
     
-    def _validate_spoken_text(self, recognized_text, reference_text, confidence):
-        """Валидация произнесенного текста (защита от спуфинга)"""
-        if not reference_text or not recognized_text:
-            return {
-                'valid': False, 
-                'match_score': 0, 
-                'reason': 'Нет текста для сравнения',
-                'reference': reference_text,
-                'recognized': recognized_text
-            }
-        
-        # Приведение к нижнему регистру, удаление знаков препинания
-        import re
-        ref_clean = re.sub(r'[^\w\s]', '', reference_text.lower())
-        rec_clean = re.sub(r'[^\w\s]', '', recognized_text.lower())
-        
-        # Разделение на слова
-        ref_words = ref_clean.split()
-        rec_words = rec_clean.split()
-        
-        # Расчет точности совпадения
-        match_score = self._calculate_text_match(ref_words, rec_words)
-        
-        # Порог уверенности
-        confidence_threshold = 0.6
-        
-        # Критерии валидности
-        is_valid = (
-            match_score >= 0.7 and  # Не менее 70% совпадения
-            confidence >= confidence_threshold and  # Достаточная уверенность
-            len(rec_words) >= max(1, len(ref_words) * 0.5)  # Распознано не менее 50% слов
-        )
-        
-        result = {
-            'valid': is_valid,
-            'match_score': match_score,
-            'confidence': confidence,
-            'reference': reference_text,
-            'recognized': recognized_text,
-            'word_count_match': len(rec_words) >= len(ref_words) * 0.5,
-            'detailed': {
-                'ref_words': ref_words,
-                'rec_words': rec_words,
-                'ref_word_count': len(ref_words),
-                'rec_word_count': len(rec_words)
-            },
-            'similarity_metrics': {
-                'sequence_matcher': SequenceMatcher(None, ref_clean, rec_clean).ratio(),
-                'word_match_ratio': match_score,
-                'missing_words': len(ref_words) - len([w for w in ref_words if w in rec_words])
-            }
+    def _assess_room_isolation(self, speech_analysis, reference_text, audio_analysis):
+        """Оценка звукоизоляции помещения по разнице в распознавании"""
+        assessment = {
+            'inside_reference_check': {},   # Проверка эталона (внутри)
+            'outside_isolation_check': {},  # Проверка изоляции (снаружи)
+            'isolation_metrics': {}         # Метрики изоляции
         }
         
-        return result
+        try:
+            # Получаем распознанные тексты
+            inside_text = speech_analysis.get('inside', {}).get('text', '')
+            outside_text = speech_analysis.get('outside', {}).get('text', '')
+            inside_confidence = speech_analysis.get('inside', {}).get('confidence', 0)
+            outside_confidence = speech_analysis.get('outside', {}).get('confidence', 0)
+            
+            print(f"📝 Внутренний текст: {inside_text[:50]}...")
+            print(f"📝 Наружный текст: {outside_text[:50]}...")
+            
+            # 1. Проверка эталона (должен хорошо распознаваться)
+            if reference_text and inside_text:
+                inside_validation = self._validate_spoken_text(inside_text, reference_text, inside_confidence)
+                assessment['inside_reference_check'] = inside_validation
+                print(f"✅ Проверка эталона: {inside_validation.get('match_score', 0)*100:.1f}%")
+            else:
+                assessment['inside_reference_check'] = {
+                    'valid': False,
+                    'match_score': 0,
+                    'error': 'Нет текста для проверки'
+                }
+            
+            # 2. Оценка изоляции по распознаванию
+            if inside_text and outside_text and reference_text:
+                # Сходство с эталоном
+                inside_similarity = self._calculate_text_similarity(reference_text, inside_text)
+                outside_similarity = self._calculate_text_similarity(reference_text, outside_text)
+                
+                print(f"📊 Сходство внутри: {inside_similarity*100:.1f}%")
+                print(f"📊 Сходство снаружи: {outside_similarity*100:.1f}%")
+                
+                # Эффективность изоляции (чем меньше снаружи, тем лучше)
+                if inside_similarity > 0:
+                    isolation_efficiency = 1 - (outside_similarity / inside_similarity)
+                    # 0% = утечка полная, 100% = идеальная изоляция
+                else:
+                    isolation_efficiency = 0
+                
+                print(f"📊 Эффективность изоляции: {isolation_efficiency*100:.1f}%")
+                
+                # Потерянные слова
+                ref_words = self._clean_and_split_text(reference_text)
+                inside_words = self._clean_and_split_text(inside_text)
+                outside_words = self._clean_and_split_text(outside_text)
+                
+                # Считаем слова, которые удалось распознать
+                words_understood_inside = self._count_matching_words(ref_words, inside_words)
+                words_understood_outside = self._count_matching_words(ref_words, outside_words)
+                
+                assessment['isolation_metrics'] = {
+                    'inside_similarity': float(inside_similarity),
+                    'outside_similarity': float(outside_similarity),
+                    'isolation_efficiency': float(isolation_efficiency),
+                    'estimated_attenuation_db': float(isolation_efficiency * 50),  # примерная оценка
+                    'words_total': len(ref_words),
+                    'words_understood_inside': words_understood_inside,
+                    'words_understood_outside': words_understood_outside,
+                    'words_lost': max(0, words_understood_inside - words_understood_outside),
+                    'leakage_percentage': float(outside_similarity / inside_similarity * 100) if inside_similarity > 0 else 100.0
+                }
+            
+            # 3. Оценка по громкости (из audio_analysis)
+            if 'level_comparison' in audio_analysis:
+                level_data = audio_analysis['level_comparison']
+                inside_rms = level_data.get('inside_rms', 0)
+                outside_rms = level_data.get('outside_rms', 0)
+                
+                # Правильный расчет ослабления для изоляции помещения
+                # Источник ВНУТРИ, измеряем СНАРУЖИ
+                if inside_rms > 0 and outside_rms > 0:
+                    if inside_rms >= outside_rms:
+                        attenuation_db = 20 * np.log10(inside_rms / outside_rms)  # ПРАВИЛЬНО!
+                    else:
+                        attenuation_db = -20 * np.log10(outside_rms / inside_rms)
+                    
+                    if 'isolation_metrics' in assessment:
+                        assessment['isolation_metrics']['attenuation_db'] = float(attenuation_db)
+                        assessment['isolation_metrics']['level_reduction_ratio'] = float(outside_rms / inside_rms)
+                        assessment['isolation_metrics']['inside_level_db'] = float(20 * np.log10(inside_rms) if inside_rms > 0 else 0)
+                        assessment['isolation_metrics']['outside_level_db'] = float(20 * np.log10(outside_rms) if outside_rms > 0 else 0)
+                    else:
+                        assessment['isolation_metrics'] = {
+                            'attenuation_db': float(attenuation_db),
+                            'level_reduction_ratio': float(outside_rms / inside_rms),
+                            'inside_level_db': float(20 * np.log10(inside_rms) if inside_rms > 0 else 0),
+                            'outside_level_db': float(20 * np.log10(outside_rms) if outside_rms > 0 else 0)
+                        }
+                    
+                    print(f"🔊 Ослабление звука: {attenuation_db:.1f} дБ")
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка оценки изоляции: {e}")
+            assessment['error'] = str(e)
+        
+        return assessment
     
-    def _calculate_text_match(self, ref_words, rec_words):
-        """Расчет совпадения текста"""
-        if not ref_words or not rec_words:
+    def _clean_and_split_text(self, text):
+        """Очистка текста и разделение на слова"""
+        if not text:
+            return []
+        
+        # Удаляем знаки препинания, приводим к нижнему регистру
+        cleaned = re.sub(r'[^\w\s]', '', str(text).lower())
+        # Разделяем на слова, удаляем пустые
+        words = [w.strip() for w in cleaned.split() if w.strip()]
+        return words
+    
+    def _count_matching_words(self, ref_words, recognized_words):
+        """Подсчет совпадающих слов с учетом частичных совпадений"""
+        if not ref_words or not recognized_words:
             return 0
         
-        # Подсчет совпадающих слов
         matches = 0
         for ref_word in ref_words:
-            for rec_word in rec_words:
-                # Сравнение слов (учитываем возможные опечатки)
+            for rec_word in recognized_words:
+                # Полное совпадение
                 if ref_word == rec_word:
                     matches += 1
                     break
-                # Частичное совпадение (например, "красный" и "красн")
-                elif ref_word.startswith(rec_word[:3]) or rec_word.startswith(ref_word[:3]):
-                    matches += 0.5
-                    break
+                # Частичное совпадение (первые 3 буквы)
+                elif len(ref_word) >= 3 and len(rec_word) >= 3:
+                    if ref_word[:3] == rec_word[:3]:
+                        matches += 0.5  # Частичный балл
+                        break
         
-        return matches / len(ref_words)
+        return matches
+    
+    def _calculate_text_similarity(self, text1, text2):
+        """Расчет схожести текстов"""
+        if not text1 or not text2:
+            return 0.0
+        
+        try:
+            # Используем SequenceMatcher для более точного сравнения
+            similarity = SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
+            return float(similarity)
+        except:
+            # Запасной метод
+            words1 = self._clean_and_split_text(text1)
+            words2 = self._clean_and_split_text(text2)
+            
+            if not words1:
+                return 0.0
+            
+            matches = self._count_matching_words(words1, words2)
+            return matches / len(words1)
+    
+    def _validate_spoken_text(self, recognized_text, reference_text, confidence):
+        """Валидация произнесенного текста"""
+        if not reference_text or not recognized_text:
+            return {
+                'valid': False, 
+                'match_score': 0.0,
+                'confidence': confidence,
+                'reference': reference_text,
+                'recognized': recognized_text,
+                'error': 'Нет текста для сравнения'
+            }
+        
+        try:
+            match_score = self._calculate_text_similarity(reference_text, recognized_text)
+            
+            # Для эталона (внутри) требуется высокая точность
+            # Минимум 60% совпадения и уверенность не ниже 0.5
+            is_valid = match_score >= 0.6 and confidence >= 0.5
+            
+            return {
+                'valid': is_valid,
+                'match_score': float(match_score),
+                'confidence': float(confidence),
+                'reference': reference_text,
+                'recognized': recognized_text,
+                'validation_passed': is_valid
+            }
+        except Exception as e:
+            return {
+                'valid': False,
+                'match_score': 0.0,
+                'confidence': confidence,
+                'error': str(e)
+            }
     
     def _perform_audio_analysis(self, outside_path, inside_path):
-        """Анализ аудио характеристик"""
+        """Анализ аудио характеристик для изоляции помещения"""
         analysis = {
             'file_stats': {
                 'outside': self._get_file_stats(outside_path),
@@ -174,7 +313,7 @@ class EnhancedSoundIsolationAnalyzer:
             'basic_metrics': {}
         }
         
-        if self.initialized:
+        if self.initialized and self.np is not None:
             try:
                 import wave
                 
@@ -182,53 +321,93 @@ class EnhancedSoundIsolationAnalyzer:
                 def read_wav_data(filepath):
                     with wave.open(filepath, 'rb') as wav:
                         frames = wav.readframes(wav.getnframes())
-                        if wav.getsampwidth() == 2:
-                            data = self.np.frombuffer(frames, dtype=self.np.int16)
+                        sample_width = wav.getsampwidth()
+                        if sample_width == 2:
+                            data = np.frombuffer(frames, dtype=np.int16)
+                        elif sample_width == 4:
+                            data = np.frombuffer(frames, dtype=np.int32)
                         else:
-                            data = self.np.frombuffer(frames, dtype=self.np.uint8)
-                        return data.astype(self.np.float32) / self.np.max(self.np.abs(data))
+                            data = np.frombuffer(frames, dtype=np.uint8)
+                        
+                        # Нормализация
+                        if data.dtype == np.int16:
+                            data = data.astype(np.float32) / 32768.0
+                        elif data.dtype == np.int32:
+                            data = data.astype(np.float32) / 2147483648.0
+                        else:
+                            data = data.astype(np.float32) / 255.0
+                        
+                        return data
                 
-                outside_data = read_wav_data(outside_path)
-                inside_data = read_wav_data(inside_path)
+                print(f"📁 Чтение аудиофайлов...")
+                inside_data = read_wav_data(inside_path)   # Источник ВНУТРИ
+                outside_data = read_wav_data(outside_path) # Что вышло СНАРУЖИ
                 
-                # Расчет RMS
-                outside_rms = self.np.sqrt(self.np.mean(outside_data**2))
-                inside_rms = self.np.sqrt(self.np.mean(inside_data**2))
+                print(f"📊 Анализирую уровни звука...")
+                # Расчет RMS (среднеквадратичное значение)
+                inside_rms = np.sqrt(np.mean(inside_data**2))
+                outside_rms = np.sqrt(np.mean(outside_data**2))
                 
-                # Ослабление в дБ
-                if outside_rms > 0 and inside_rms > 0:
-                    db_reduction = 20 * self.np.log10(inside_rms / outside_rms)
-                    attenuation = abs(db_reduction)
+                # Правильный расчет ослабления для изоляции помещения
+                # Источник ВНУТРИ, измеряем СНАРУЖИ
+                if inside_rms > 0 and outside_rms > 0:
+                    if inside_rms >= outside_rms:
+                        attenuation_db = 20 * np.log10(inside_rms / outside_rms)  # ПРАВИЛЬНО!
+                        reduction_ratio = outside_rms / inside_rms  # Какая часть звука вышла
+                    else:
+                        attenuation_db = -20 * np.log10(outside_rms / inside_rms)
+                        reduction_ratio = 1.0  # Аномалия: снаружи громче
                 else:
-                    attenuation = 0
+                    attenuation_db = 0
+                    reduction_ratio = 0
+                
+                # Уровни в дБFS (относительно полной шкалы)
+                inside_level_db = 20 * np.log10(inside_rms) if inside_rms > 0 else -np.inf
+                outside_level_db = 20 * np.log10(outside_rms) if outside_rms > 0 else -np.inf
+                
+                analysis['level_comparison'] = {
+                    'inside_rms': float(inside_rms),      # Уровень источника ВНУТРИ
+                    'outside_rms': float(outside_rms),    # Уровень СНАРУЖИ
+                    'attenuation_db': float(attenuation_db),  # Ослабление звука
+                    'reduction_ratio': float(reduction_ratio), # Доля звука, вышедшего наружу
+                    'sound_reduction_index': float(attenuation_db),  # Индекс звукоизоляции
+                    'inside_level_db': float(inside_level_db),
+                    'outside_level_db': float(outside_level_db),
+                    'level_difference_db': float(inside_level_db - outside_level_db)
+                }
                 
                 # Дополнительные метрики
-                analysis['level_comparison'] = {
-                    'outside_rms': float(outside_rms),
-                    'inside_rms': float(inside_rms),
-                    'attenuation_db': float(attenuation),
-                    'reduction_ratio': float(outside_rms / inside_rms) if inside_rms > 0 else 0
-                }
-                
-                # Спектральный анализ
-                if len(outside_data) > 0 and len(inside_data) > 0:
-                    spectral_metrics = self._calculate_spectral_metrics(outside_data, inside_data)
-                    analysis['spectral_analysis'] = spectral_metrics
-                
-                # Базовые метрики
                 analysis['basic_metrics'] = {
-                    'outside_max': float(self.np.max(np.abs(outside_data))),
-                    'inside_max': float(self.np.max(np.abs(inside_data))),
-                    'outside_mean': float(self.np.mean(np.abs(outside_data))),
-                    'inside_mean': float(self.np.mean(np.abs(inside_data))),
-                    'outside_std': float(self.np.std(outside_data)),
-                    'inside_std': float(self.np.std(inside_data)),
-                    'correlation': float(self.np.corrcoef(outside_data[:min(len(outside_data), len(inside_data))], 
-                                                        inside_data[:min(len(outside_data), len(inside_data))])[0, 1])
+                    'inside_max': float(np.max(np.abs(inside_data))),
+                    'outside_max': float(np.max(np.abs(outside_data))),
+                    'inside_mean': float(np.mean(np.abs(inside_data))),
+                    'outside_mean': float(np.mean(np.abs(outside_data))),
+                    'inside_std': float(np.std(inside_data)),
+                    'outside_std': float(np.std(outside_data)),
+                    'inside_dynamic_range': float(20 * np.log10(np.max(np.abs(inside_data)) / (np.std(inside_data) + 1e-10))),
+                    'outside_dynamic_range': float(20 * np.log10(np.max(np.abs(outside_data)) / (np.std(outside_data) + 1e-10)))
                 }
+                
+                # Расчет корреляции (для очень коротких файлов может быть проблема)
+                min_len = min(len(inside_data), len(outside_data))
+                if min_len > 100:  # Нужно достаточно данных
+                    try:
+                        correlation = np.corrcoef(
+                            inside_data[:min_len], 
+                            outside_data[:min_len]
+                        )[0, 1]
+                        analysis['basic_metrics']['correlation'] = float(correlation)
+                    except:
+                        analysis['basic_metrics']['correlation'] = 0.0
+                else:
+                    analysis['basic_metrics']['correlation'] = 0.0
+                
+                print(f"✅ Аудиоанализ: внутри {inside_rms:.4f}, снаружи {outside_rms:.4f}, ослабление {attenuation_db:.1f} дБ")
                 
             except Exception as e:
-                print(f"⚠️ Ошибка продвинутого анализа: {e}")
+                print(f"⚠️ Ошибка продвинутого аудиоанализа: {e}")
+                import traceback
+                traceback.print_exc()
         
         return analysis
     
@@ -241,89 +420,50 @@ class EnhancedSoundIsolationAnalyzer:
             'engine_info': {}
         }
         
-        if self.recognizer and hasattr(self.recognizer, 'current_engine'):
-            engine = self.recognizer.current_engine
-            if engine:
-                analysis['engine_info'] = {
-                    'name': engine.value,
-                    'type': 'whisper' if 'whisper' in engine.value else 'vosk'
-                }
+        if self.recognizer:
+            try:
+                print(f"🔍 Начинаю распознавание речи...")
                 
-                try:
-                    # Распознавание
-                    recognition_result = self.recognizer.analyze_pair(outside_path, inside_path, reference_text)
-                    
+                # Получаем информацию о текущем движке
+                if hasattr(self.recognizer, 'current_engine'):
+                    engine = self.recognizer.current_engine
+                    if engine:
+                        analysis['engine_info'] = {
+                            'name': str(engine),
+                            'type': 'whisper' if 'whisper' in str(engine).lower() else 'vosk'
+                        }
+                
+                # Распознавание пары файлов
+                recognition_result = self.recognizer.analyze_pair(outside_path, inside_path, reference_text)
+                
+                # Заполняем результаты
+                if recognition_result:
                     analysis['outside'] = recognition_result.get('outside', {})
                     analysis['inside'] = recognition_result.get('inside', {})
                     analysis['comparison'] = recognition_result.get('comparison', {})
                     
-                    # Дополнительные метрики
-                    if reference_text:
-                        wer_outside = self.recognizer.calculate_wer(reference_text, analysis['outside'].get('text', ''))
-                        wer_inside = self.recognizer.calculate_wer(reference_text, analysis['inside'].get('text', ''))
-                        
-                        analysis['comparison']['wer_to_reference'] = {
-                            'outside': wer_outside,
-                            'inside': wer_inside,
-                            'difference': wer_inside - wer_outside
-                        }
+                    print(f"✅ Распознавание завершено")
+                    print(f"   Внутри: {analysis['inside'].get('text', '')[:50]}...")
+                    print(f"   Снаружи: {analysis['outside'].get('text', '')[:50]}...")
+                    if 'wer' in analysis['comparison']:
+                        print(f"   WER: {analysis['comparison'].get('wer', 0):.2%}")
+                else:
+                    print(f"⚠️ Результат распознавания пустой")
+                    analysis['error'] = 'Результат распознавания пустой'
                     
-                except Exception as e:
-                    print(f"⚠️ Ошибка распознавания: {e}")
-                    analysis['error'] = str(e)
+            except Exception as e:
+                print(f"❌ Ошибка распознавания речи: {e}")
+                analysis['error'] = str(e)
         
         return analysis
     
-    def _calculate_spectral_metrics(self, outside_data, inside_data):
-        """Расчет спектральных метрик"""
-        try:
-            import scipy.signal as signal
-            
-            # Спектральная плотность мощности
-            f_out, Pxx_out = signal.welch(outside_data, fs=44100, nperseg=1024)
-            f_in, Pxx_in = signal.welch(inside_data, fs=44100, nperseg=1024)
-            
-            # Основные частоты
-            dominant_freq_out = f_out[np.argmax(Pxx_out)]
-            dominant_freq_in = f_in[np.argmax(Pxx_in)]
-            
-            # Энергия в речевом диапазоне (300-3400 Гц)
-            speech_band = (300, 3400)
-            mask_out = (f_out >= speech_band[0]) & (f_out <= speech_band[1])
-            mask_in = (f_in >= speech_band[0]) & (f_in <= speech_band[1])
-            
-            speech_energy_out = np.trapz(Pxx_out[mask_out], f_out[mask_out])
-            speech_energy_in = np.trapz(Pxx_in[mask_in], f_in[mask_in])
-            total_energy_out = np.trapz(Pxx_out, f_out)
-            total_energy_in = np.trapz(Pxx_in, f_in)
-            
-            return {
-                'dominant_frequency': {
-                    'outside': float(dominant_freq_out),
-                    'inside': float(dominant_freq_in)
-                },
-                'speech_band_energy': {
-                    'outside': float(speech_energy_out),
-                    'inside': float(speech_energy_in),
-                    'outside_ratio': float(speech_energy_out / total_energy_out) if total_energy_out > 0 else 0,
-                    'inside_ratio': float(speech_energy_in / total_energy_in) if total_energy_in > 0 else 0
-                }
-            }
-            
-        except ImportError:
-            print("⚠️ SciPy не установлен, пропускаем спектральный анализ")
-            return {}
-        except Exception as e:
-            print(f"⚠️ Ошибка спектрального анализа: {e}")
-            return {}
-    
-    def _integrate_analyses(self, audio_analysis, speech_analysis, text_validation=None):
-        """Интеграция аудио анализа и распознавания речи"""
+    def _integrate_analyses(self, audio_analysis, speech_analysis, isolation_assessment=None):
+        """Интеграция анализов для оценки изоляции помещения"""
         metrics = {
             'basic': {},
             'recognition': {},
-            'composite_scores': {},
-            'spoof_protection': {}  # НОВОЕ: метрики защиты от спуфинга
+            'isolation_metrics': {},
+            'composite_scores': {}
         }
         
         # Базовые метрики из аудио анализа
@@ -331,52 +471,57 @@ class EnhancedSoundIsolationAnalyzer:
             metrics['basic'] = audio_analysis['basic_metrics']
         
         if 'level_comparison' in audio_analysis:
-            metrics['basic']['attenuation_db'] = audio_analysis['level_comparison'].get('attenuation_db', 0)
-            metrics['basic']['reduction_ratio'] = audio_analysis['level_comparison'].get('reduction_ratio', 0)
+            level_data = audio_analysis['level_comparison']
+            attenuation = level_data.get('attenuation_db', 0)
             
-            # Качество изоляции на основе ослабления
-            attenuation = metrics['basic'].get('attenuation_db', 0)
-            if attenuation >= 45:
+            metrics['basic']['attenuation_db'] = attenuation
+            metrics['basic']['sound_reduction_index'] = attenuation
+            
+            # Оценка качества изоляции по ослаблению
+            if attenuation >= 50:
                 metrics['basic']['isolation_quality'] = "отличная"
-            elif attenuation >= 30:
+                metrics['basic']['isolation_score'] = 90 + min((attenuation - 50), 10)
+            elif attenuation >= 40:
                 metrics['basic']['isolation_quality'] = "хорошая"
-            elif attenuation >= 20:
+                metrics['basic']['isolation_score'] = 70 + min((attenuation - 40) * 2, 20)
+            elif attenuation >= 30:
                 metrics['basic']['isolation_quality'] = "удовлетворительная"
-            else:
+                metrics['basic']['isolation_score'] = 50 + min((attenuation - 30) * 2, 20)
+            elif attenuation >= 20:
                 metrics['basic']['isolation_quality'] = "плохая"
+                metrics['basic']['isolation_score'] = 30 + min((attenuation - 20) * 2, 20)
+            else:
+                metrics['basic']['isolation_quality'] = "очень плохая"
+                metrics['basic']['isolation_score'] = attenuation * 1.5
         
         # Метрики распознавания
         if 'comparison' in speech_analysis:
             metrics['recognition'] = speech_analysis['comparison']
             
-            # WER как показатель утечки
+            # WER как показатель утечки речи
             wer = speech_analysis['comparison'].get('wer', 1.0)
-            metrics['recognition']['leakage_level'] = 'высокая' if wer < 0.4 else 'средняя' if wer < 0.7 else 'низкая'
+            if wer < 0.4:
+                metrics['recognition']['speech_leakage'] = 'высокая'
+            elif wer < 0.7:
+                metrics['recognition']['speech_leakage'] = 'средняя'
+            else:
+                metrics['recognition']['speech_leakage'] = 'низкая'
+            
             metrics['recognition']['leakage_detected'] = wer < 0.5
         
-        # МЕТРИКИ ЗАЩИТЫ ОТ СПУФИНГА
-        if text_validation:
-            metrics['spoof_protection'] = {
-                'text_validation': text_validation.get('valid', False),
-                'match_score': text_validation.get('match_score', 0),
-                'confidence': text_validation.get('confidence', 0),
-                'word_count_match': text_validation.get('word_count_match', False),
-                'similarity': text_validation.get('similarity_metrics', {}).get('sequence_matcher', 0),
-                'missing_words': text_validation.get('similarity_metrics', {}).get('missing_words', 0)
-            }
+        # Метрики изоляции
+        if isolation_assessment and 'isolation_metrics' in isolation_assessment:
+            iso_metrics = isolation_assessment['isolation_metrics']
+            metrics['isolation_metrics'] = iso_metrics
             
-            # Оценка защиты от спуфинга
-            spoof_protection_score = (
-                (1.0 if text_validation.get('valid') else 0.3) * 0.5 +
-                text_validation.get('match_score', 0) * 0.3 +
-                text_validation.get('confidence', 0) * 0.2
-            )
-            metrics['spoof_protection']['protection_score'] = spoof_protection_score
-            metrics['spoof_protection']['protection_level'] = (
-                'высокий' if spoof_protection_score >= 0.8 else
-                'средний' if spoof_protection_score >= 0.6 else
-                'низкий'
-            )
+            # Комбинированная оценка изоляции
+            if 'attenuation_db' in iso_metrics and 'isolation_efficiency' in iso_metrics:
+                # Нормализуем ослабление (0-60 дБ -> 0-1)
+                attenuation_norm = min(iso_metrics['attenuation_db'] / 60, 1.0)
+                efficiency_norm = iso_metrics['isolation_efficiency']
+                
+                combined_score = (attenuation_norm * 0.6 + efficiency_norm * 0.4) * 100
+                metrics['isolation_metrics']['combined_isolation_score'] = combined_score
         
         # Композитные оценки
         composite = self._calculate_composite_scores(metrics)
@@ -390,32 +535,26 @@ class EnhancedSoundIsolationAnalyzer:
         
         # Оценка изоляции на основе ослабления (0-100)
         attenuation = metrics['basic'].get('attenuation_db', 0)
-        isolation_score = min(100, attenuation * 2)  # 50 дБ = 100 баллов
+        isolation_score = min(100, max(0, attenuation * 2))  # 50 дБ = 100 баллов
         
-        # Оценка на основе WER
+        # Оценка на основе WER (если есть)
         wer = metrics['recognition'].get('wer', 1.0)
         wer_score = max(0, 100 - (wer * 100))  # WER 0% = 100 баллов, 100% = 0 баллов
         
-        # Оценка на основе корреляции сигналов
-        correlation = metrics['basic'].get('correlation', 0)
-        correlation_score = max(0, 50 - (abs(correlation) * 100))  # Низкая корреляция = лучше
-        
-        # Оценка защиты от спуфинга
-        spoof_protection = metrics.get('spoof_protection', {})
-        spoof_score = spoof_protection.get('protection_score', 0.5) * 100
+        # Оценка на основе эффективности изоляции (если есть)
+        iso_efficiency = metrics['isolation_metrics'].get('isolation_efficiency', 0.5)
+        efficiency_score = iso_efficiency * 100
         
         # Итоговая оценка (взвешенная)
         total_score = (
-            isolation_score * 0.4 +      # 40% за ослабление
-            wer_score * 0.2 +           # 20% за WER
-            correlation_score * 0.1 +    # 10% за корреляцию
-            spoof_score * 0.3            # 30% за защиту от спуфинга
+            isolation_score * 0.4 +          # 40% за ослабление
+            wer_score * 0.3 +               # 30% за WER
+            efficiency_score * 0.3          # 30% за эффективность
         )
         
         scores['isolation_score'] = isolation_score
         scores['recognition_score'] = wer_score
-        scores['correlation_score'] = correlation_score
-        scores['spoof_protection_score'] = spoof_score
+        scores['efficiency_score'] = efficiency_score
         scores['total_score'] = total_score
         scores['grade'] = self._score_to_grade(total_score)
         
@@ -434,13 +573,128 @@ class EnhancedSoundIsolationAnalyzer:
         else:
             return "Плохо (F)"
     
+    def _calculate_overall_assessment(self, detailed_metrics, isolation_assessment=None):
+        """Расчет итоговой оценки для аттестации помещения"""
+        try:
+            basic = detailed_metrics.get('basic', {})
+            isolation_metrics = detailed_metrics.get('isolation_metrics', {})
+            composite = detailed_metrics.get('composite_scores', {})
+            
+            # Ключевые метрики
+            attenuation = basic.get('attenuation_db', 0)
+            isolation_score = composite.get('total_score', 0)
+            isolation_quality = basic.get('isolation_quality', 'неизвестно')
+            
+            # Вердикт на основе ослабления звука
+            if attenuation >= 50:
+                verdict = "ОТЛИЧНАЯ ЗВУКОИЗОЛЯЦИЯ"
+                color = "darkgreen"
+            elif attenuation >= 40:
+                verdict = "ХОРОШАЯ ЗВУКОИЗОЛЯЦИЯ"
+                color = "green"
+            elif attenuation >= 30:
+                verdict = "УДОВЛЕТВОРИТЕЛЬНАЯ ИЗОЛЯЦИЯ"
+                color = "orange"
+            elif attenuation >= 20:
+                verdict = "СЛАБАЯ ЗВУКОИЗОЛЯЦИЯ"
+                color = "red"
+            else:
+                verdict = "НЕЭФФЕКТИВНАЯ ИЗОЛЯЦИЯ"
+                color = "darkred"
+            
+            # Проверка эталона
+            if isolation_assessment and 'inside_reference_check' in isolation_assessment:
+                inside_check = isolation_assessment['inside_reference_check']
+                if not inside_check.get('valid', True):
+                    verdict += " (ПРОБЛЕМА С ЭТАЛОНОМ)"
+                    color = "purple"
+            
+            # Сводка
+            summary_parts = []
+            summary_parts.append(f"Ослабление звука: {attenuation:.1f} дБ")
+            
+            if 'isolation_efficiency' in isolation_metrics:
+                efficiency = isolation_metrics['isolation_efficiency'] * 100
+                summary_parts.append(f"Эффективность изоляции: {efficiency:.0f}%")
+            
+            if 'words_lost' in isolation_metrics and 'words_total' in isolation_metrics:
+                words_lost = isolation_metrics['words_lost']
+                words_total = isolation_metrics['words_total']
+                if words_total > 0:
+                    summary_parts.append(f"Слов потеряно: {words_lost}/{words_total}")
+            
+            summary = ", ".join(summary_parts)
+            
+            # Рекомендации
+            recommendations = self._get_recommendations_for_isolation(basic, isolation_metrics)
+            
+            return {
+                'verdict': verdict,
+                'color': color,
+                'quality': isolation_quality,
+                'attenuation_db': float(attenuation),
+                'isolation_score': float(isolation_score),
+                'composite_grade': composite.get('grade', 'Н/Д'),
+                'summary': summary,
+                'recommendations': recommendations,
+                'detailed_metrics_available': True
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка расчета итоговой оценки: {e}")
+            return {
+                'verdict': 'ОШИБКА АНАЛИЗА',
+                'color': 'red',
+                'summary': f'Ошибка: {str(e)[:100]}',
+                'recommendations': ['Проверьте входные данные', 'Убедитесь в корректности аудиофайлов']
+            }
+    
+    def _get_recommendations_for_isolation(self, basic, isolation_metrics):
+        """Рекомендации по улучшению звукоизоляции"""
+        recommendations = []
+        
+        attenuation = basic.get('attenuation_db', 0)
+        efficiency = isolation_metrics.get('isolation_efficiency', 0)
+        words_lost = isolation_metrics.get('words_lost', 0)
+        
+        # Рекомендации по ослаблению
+        if attenuation < 30:
+            recommendations.append("Усилить изоляцию стен и перекрытий")
+            recommendations.append("Установить звукопоглощающие материалы (минеральная вата, акустические панели)")
+            recommendations.append("Проверить герметичность окон и дверей, установить уплотнители")
+        
+        if 20 <= attenuation < 35:
+            recommendations.append("Рассмотреть установку звукоизоляционных мембран")
+            recommendations.append("Добавить ковровое покрытие для снижения ударного шума")
+        
+        # Рекомендации по утечке речи
+        if efficiency < 0.5:  # Меньше 50% эффективности
+            recommendations.append("Обнаружена значительная утечка речи - требуется усиление изоляции")
+        
+        if words_lost > 0:
+            recommendations.append(f"Обнаружена утечка {words_lost} слов - рекомендуется дополнительная звукоизоляция")
+        
+        # Общие рекомендации
+        if attenuation >= 40 and efficiency >= 0.7:
+            recommendations.append("Изоляция соответствует нормам для жилых помещений")
+        
+        if attenuation >= 50:
+            recommendations.append("Отличная изоляция! Соответствует требованиям для конференц-залов")
+        
+        # Если рекомендаций нет, добавить стандартные
+        if not recommendations:
+            recommendations.append("Провести дополнительные измерения в разных точках помещения")
+            recommendations.append("Рассмотреть возможность профессиональной акустической экспертизы")
+        
+        return recommendations
+    
     def _create_basic_metrics(self, audio_analysis):
         """Создание базовых метрик если распознавание недоступно"""
         metrics = {
             'basic': {},
             'recognition': {'available': False},
-            'composite_scores': {},
-            'spoof_protection': {'available': False}
+            'isolation_metrics': {'available': False},
+            'composite_scores': {}
         }
         
         if 'basic_metrics' in audio_analysis:
@@ -452,134 +706,38 @@ class EnhancedSoundIsolationAnalyzer:
             
             if attenuation >= 45:
                 metrics['basic']['isolation_quality'] = "отличная"
-            elif attenuation >= 30:
+            elif attenuation >= 35:
                 metrics['basic']['isolation_quality'] = "хорошая"
-            elif attenuation >= 20:
+            elif attenuation >= 25:
                 metrics['basic']['isolation_quality'] = "удовлетворительная"
             else:
                 metrics['basic']['isolation_quality'] = "плохая"
         
         return metrics
     
-    def _calculate_overall_assessment(self, detailed_metrics, text_validation=None):
-        """Расчет итоговой оценки"""
-        basic = detailed_metrics.get('basic', {})
-        recognition = detailed_metrics.get('recognition', {})
-        composite = detailed_metrics.get('composite_scores', {})
-        spoof_protection = detailed_metrics.get('spoof_protection', {})
-        
-        # Вердикт на основе качества изоляции
-        quality = basic.get('isolation_quality', 'неизвестно')
-        
-        if quality == "отличная":
-            verdict = "ОТЛИЧНАЯ ИЗОЛЯЦИЯ"
-            color = "green"
-        elif quality == "хорошая":
-            verdict = "ХОРОШАЯ ИЗОЛЯЦИЯ"
-            color = "lightgreen"
-        elif quality == "удовлетворительная":
-            verdict = "СРЕДНЯЯ ИЗОЛЯЦИЯ"
-            color = "yellow"
-        elif quality == "плохая":
-            verdict = "НЕДОСТАТОЧНАЯ ИЗОЛЯЦИЯ"
-            color = "red"
-        else:
-            verdict = "АНАЛИЗ ВЫПОЛНЕН"
-            color = "gray"
-        
-        # Учет результатов распознавания
-        if recognition.get('leakage_detected', False):
-            verdict += " (УТЕЧКА ОБНАРУЖЕНА)"
-            color = "orange"
-        
-        # Учет защиты от спуфинга
-        if text_validation and not text_validation.get('valid', True):
-            verdict += " (ВОЗМОЖНА СПУФИНГ-АТАКА!)"
-            color = "darkred"
-        elif spoof_protection.get('text_validation', True):
-            verdict += " (ЗАЩИЩЕНО ОТ СПУФИНГА)"
-            color = "darkgreen"
-        
-        # Сводка
-        attenuation = basic.get('attenuation_db', 0)
-        wer = recognition.get('wer', 'N/A')
-        
-        if isinstance(wer, (int, float)):
-            wer_text = f"{wer:.1%}"
-        else:
-            wer_text = str(wer)
-        
-        summary = f"Звукоизоляция: {quality}. Снижение шума: {attenuation:.1f} дБ"
-        
-        if recognition.get('available', True) and isinstance(wer, (int, float)):
-            summary += f", WER: {wer_text}"
-        
-        if text_validation:
-            if text_validation.get('valid'):
-                summary += ", Текст: соответствует"
-            else:
-                summary += ", Текст: НЕ соответствует (спуфинг?)"
-        
-        # Рекомендации
-        recommendations = self._get_recommendations(basic, recognition, text_validation)
-        
-        return {
-            'verdict': verdict,
-            'color': color,
-            'quality': quality,
-            'db_reduction': float(attenuation),
-            'wer': wer_text,
-            'text_valid': text_validation.get('valid', True) if text_validation else True,
-            'composite_score': composite.get('total_score', 0),
-            'grade': composite.get('grade', 'N/A'),
-            'summary': summary,
-            'recommendations': recommendations,
-            'detailed_metrics_available': True
-        }
-    
-    def _get_recommendations(self, basic, recognition, text_validation):
-        """Получение рекомендаций на основе анализа"""
-        recommendations = []
-        
-        attenuation = basic.get('attenuation_db', 0)
-        leakage = recognition.get('leakage_detected', False)
-        wer = recognition.get('wer', 1.0)
-        
-        # Рекомендации по звукоизоляции
-        if attenuation < 20:
-            recommendations.append("Усилить изоляцию стен и окон")
-            recommendations.append("Установить звукопоглощающие материалы")
-            recommendations.append("Проверить наличие щелей и зазоров")
-        elif attenuation < 35:
-            recommendations.append("Добавить уплотнители на двери и окна")
-            recommendations.append("Рассмотреть ковровое покрытие")
-        
-        # Рекомендации по утечке речи
-        if leakage or (isinstance(wer, (int, float)) and wer < 0.5):
-            recommendations.append("Обнаружена утечка речи - усилить звукоизоляцию")
-            recommendations.append("Проверить целостность звукоизоляционных материалов")
-        
-        # Рекомендации по защите от спуфинга
-        if text_validation and not text_validation.get('valid', True):
-            recommendations.append("⚠️ ВОЗМОЖНА СПУФИНГ-АТАКА: Текст не соответствует!")
-            recommendations.append("Проверьте источник звука (возможно записанная речь)")
-            recommendations.append("Используйте более сложные фразы для проверки")
-            recommendations.append("Проведите повторный тест с новой фразой")
-        elif text_validation and text_validation.get('valid'):
-            recommendations.append("✅ Защита от спуфинга активна: текст соответствует")
-        
-        if not recommendations:
-            recommendations.append("Изоляция соответствует нормам")
-        
-        return recommendations
-    
     def _get_file_stats(self, filepath):
         """Получение статистики файла"""
         try:
-            size = os.path.getsize(filepath) // 1024  # КБ
-            return {'size_kb': size, 'exists': True}
-        except:
-            return {'size_kb': 0, 'exists': False}
+            size_kb = os.path.getsize(filepath) // 1024
+            exists = os.path.exists(filepath)
+            
+            # Получаем время создания/модификации
+            mtime = os.path.getmtime(filepath)
+            from datetime import datetime
+            mod_time = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+            
+            return {
+                'size_kb': size_kb,
+                'exists': exists,
+                'modified': mod_time,
+                'filename': os.path.basename(filepath)
+            }
+        except Exception as e:
+            return {
+                'size_kb': 0,
+                'exists': False,
+                'error': str(e)
+            }
     
     def _create_error_report(self, test_name, error_message):
         """Создание отчета об ошибке"""
@@ -593,8 +751,12 @@ class EnhancedSoundIsolationAnalyzer:
                     'verdict': 'ОШИБКА АНАЛИЗА',
                     'color': 'red',
                     'quality': 'неизвестно',
-                    'recommendations': ['Проверить аудиофайлы', 'Установить все зависимости'],
-                    'summary': 'Произошла ошибка при анализе'
+                    'recommendations': [
+                        'Проверьте аудиофайлы',
+                        'Убедитесь, что файлы не повреждены',
+                        'Проверьте установку всех зависимостей'
+                    ],
+                    'summary': f'Произошла ошибка при анализе: {error_message[:100]}'
                 }
             }
         }
@@ -606,7 +768,7 @@ class EnhancedSoundIsolationAnalyzer:
                 from speech_recognizer import RecognitionEngine
                 engine = RecognitionEngine(engine_name)
                 return self.recognizer.set_engine(engine)
-            except:
-                print(f"⚠️ Не удалось установить движок: {engine_name}")
+            except Exception as e:
+                print(f"⚠️ Не удалось установить движок {engine_name}: {e}")
                 return False
         return False

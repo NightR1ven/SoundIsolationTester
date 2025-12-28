@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, scrolledtext
+from tkinter import ttk, messagebox, filedialog, scrolledtext, simpledialog
 import threading
 import time
 import sys
@@ -766,9 +766,10 @@ class AdvancedSoundTester:
             # Показываем фразу для произнесения
             if reference_text:
                 messagebox.showinfo("Произнесите фразу", 
-                    f"СНАРУЖИ помещения произнесите громко и четко:\n\n"
+                    f"ВНУТРИ помещения произнесите громко и четко:\n\n"
                     f"📢 '{reference_text}'\n\n"
-                    f"Система проверит соответствие текста для защиты от спуфинг-атак.")
+                    f"Система проверит соответствие текста ВНУТРИ помещения\n"
+                    f"для защиты от спуфинг-атак (использования записанной речи).")
             
             # Показываем и активируем индикаторы
             self.show_indicators()
@@ -1255,89 +1256,182 @@ class AdvancedSoundTester:
             messagebox.showwarning("Предупреждение", f"Ошибка анализа: {e}")
     
     def _display_analysis_results(self, analysis):
-        """Отобразить результаты анализа"""
+        """Отобразить результаты анализа для аттестации помещения"""
         try:
             overall = analysis.get('results', {}).get('overall_assessment', {})
-            
-            result_text = "=" * 60 + "\n"
-            result_text += f"АНАЛИЗ ЗАПИСИ: {analysis.get('test_name', 'N/A')}\n"
-            result_text += f"ВРЕМЯ: {analysis.get('timestamp', 'N/A')}\n"
-            result_text += "=" * 60 + "\n\n"
-            
-            # Проверка текста (НОВОЕ)
-            text_validation = analysis.get('results', {}).get('text_validation', {})
-            if text_validation:
-                if text_validation.get('valid', False):
-                    result_text += "✅ ТЕКСТ ПРОВЕРЕН: Совпадает с заданным\n\n"
+            isolation = analysis.get('results', {}).get('isolation_assessment', {})
+            audio = analysis.get('results', {}).get('audio_analysis', {})
+            speech = analysis.get('results', {}).get('speech_recognition', {})
+        
+            result_text = "=" * 70 + "\n"
+            result_text += f"АТТЕСТАЦИЯ ЗВУКОИЗОЛЯЦИИ ПОМЕЩЕНИЯ\n"
+            result_text += f"Тест: {analysis.get('test_name', 'N/A')}\n"
+            result_text += f"Время: {analysis.get('timestamp', 'N/A')}\n"
+            result_text += "=" * 70 + "\n\n"
+        
+            # 1. ПРОВЕРКА ЭТАЛОНА (внутренняя запись)
+            result_text += "🔍 ПРОВЕРКА ВНУТРИ ПОМЕЩЕНИЯ:\n"
+            result_text += "-" * 40 + "\n"
+        
+            if isolation and 'inside_reference_check' in isolation:
+                inside_check = isolation['inside_reference_check']
+                if inside_check.get('valid', False):
+                    result_text += "✅ Речь распознана корректно\n"
                 else:
-                    result_text += "❌ ВНИМАНИЕ: ТЕКСТ НЕ СОВПАДАЕТ!\n"
-                    result_text += "   Возможна спуфинг-атака (использование записанной речи)\n\n"
-                    result_text += f"   Заданный текст: '{text_validation.get('reference', 'N/A')}'\n"
-                    result_text += f"   Распознанный текст: '{text_validation.get('recognized', 'N/A')}'\n"
-                    result_text += f"   Совпадение: {text_validation.get('match_score', 0)*100:.1f}%\n\n"
+                    result_text += "⚠️ Проблемы с распознаванием!\n"
             
-            # Вердикт
-            verdict = overall.get('verdict', 'N/A')
-            color = overall.get('color', 'black')
-            result_text += f"ВЕРДИКТ: {verdict}\n\n"
+                if 'match_score' in inside_check:
+                    result_text += f"   Совпадение с текстом: {inside_check.get('match_score', 0)*100:.1f}%\n"
+                if 'confidence' in inside_check:
+                    result_text += f"   Уверенность распознавания: {inside_check.get('confidence', 0)*100:.1f}%\n"
             
-            # Сводка
-            summary = overall.get('summary', 'N/A')
-            result_text += f"СВОДКА: {summary}\n\n"
+                if 'recognized' in inside_check and inside_check['recognized']:
+                    recognized = inside_check['recognized']
+                    if len(recognized) > 100:
+                        recognized = recognized[:100] + "..."
+                    result_text += f"   Распознанный текст: \"{recognized}\"\n"
+            else:
+                result_text += "ℹ️ Проверка не выполнена\n"
+        
+            result_text += "\n"
+        
+            # 2. ОЦЕНКА ЗВУКОИЗОЛЯЦИИ
+            result_text += "📊 ОЦЕНКА ЗВУКОИЗОЛЯЦИИ ПОМЕЩЕНИЯ:\n"
+            result_text += "-" * 40 + "\n"
+        
+            # 2.1 Оценка по громкости
+            if audio and 'level_comparison' in audio:
+                level_data = audio['level_comparison']
+                attenuation = level_data.get('attenuation_db', 0)
+                inside_rms = level_data.get('inside_rms', 0)
+                outside_rms = level_data.get('outside_rms', 0)
             
-            # Детальные метрики
-            detailed = analysis.get('results', {}).get('detailed_metrics', {})
-            if detailed:
-                basic = detailed.get('basic', {})
-                if basic:
-                    result_text += "ОСНОВНЫЕ МЕТРИКИ:\n"
-                    result_text += f"  • Ослабление: {basic.get('attenuation_db', 0):.1f} дБ\n"
-                    result_text += f"  • Качество изоляции: {basic.get('isolation_quality', 'N/A')}\n"
-                    result_text += f"  • Корреляция сигналов: {basic.get('correlation', 0):.3f}\n"
+                result_text += f"🎚️ УРОВНИ ГРОМКОСТИ:\n"
+                result_text += f"   • Внутри (источник): {inside_rms:.4f}\n"
+                result_text += f"   • Снаружи (измерение): {outside_rms:.4f}\n"
+                result_text += f"   • Ослабление звука: {attenuation:.1f} дБ\n"
+            
+                if 'level_reduction_ratio' in level_data:
+                    reduction = level_data['level_reduction_ratio'] * 100
+                    result_text += f"   • Звука вышло наружу: {reduction:.1f}%\n"
+            
+                result_text += "\n"
+        
+            # 2.2 Оценка по распознаванию речи
+            if isolation and 'isolation_metrics' in isolation:
+                iso_metrics = isolation['isolation_metrics']
+            
+                result_text += f"🗣️ ОЦЕНКА ПО РАСПОЗНАВАНИЮ РЕЧИ:\n"
+            
+                if 'inside_similarity' in iso_metrics and 'outside_similarity' in iso_metrics:
+                    inside_sim = iso_metrics['inside_similarity'] * 100
+                    outside_sim = iso_metrics['outside_similarity'] * 100
+                    result_text += f"   • Сходство с эталоном внутри: {inside_sim:.1f}%\n"
+                    result_text += f"   • Сходство с эталоном снаружи: {outside_sim:.1f}%\n"
                 
-                composite = detailed.get('composite_scores', {})
-                if composite:
-                    result_text += "\nКОМПОЗИТНЫЕ ОЦЕНКИ:\n"
-                    result_text += f"  • Общая оценка: {composite.get('total_score', 0):.1f}/100\n"
-                    result_text += f"  • Оценка: {composite.get('grade', 'N/A')}\n"
+                    if inside_sim > 0:
+                        efficiency = (1 - (outside_sim / inside_sim)) * 100
+                        result_text += f"   • Эффективность изоляции: {efficiency:.1f}%\n"
             
-            # Проверка спуфинга
-            spoof_check = analysis.get('results', {}).get('spoof_check', {})
-            if spoof_check:
-                result_text += "\n🔍 ПРОВЕРКА НА СПУФИНГ:\n"
-                if spoof_check.get('is_spoofing_suspected', False):
-                    result_text += "  ❌ ПОДОЗРЕНИЕ НА СПУФИНГ-АТАКУ!\n"
-                    result_text += f"  Тип атаки: {spoof_check.get('suspected_attack_type', 'неизвестно')}\n"
-                    result_text += f"  Уверенность: {spoof_check.get('confidence', 0)*100:.1f}%\n"
-                    if spoof_check.get('warnings'):
-                        result_text += "  Предупреждения:\n"
-                        for warning in spoof_check.get('warnings', []):
-                            result_text += f"    • {warning}\n"
-                else:
-                    result_text += "  ✅ Спуфинг-атаки не обнаружены\n"
+                if 'words_total' in iso_metrics:
+                    total = iso_metrics['words_total']
+                    inside_words = iso_metrics.get('words_understood_inside', 0)
+                    outside_words = iso_metrics.get('words_understood_outside', 0)
+                    lost_words = iso_metrics.get('words_lost', 0)
+                
+                    result_text += f"\n   📝 АНАЛИЗ СЛОВ:\n"
+                    result_text += f"   • Всего слов в фразе: {total}\n"
+                    result_text += f"   • Слов распознано внутри: {inside_words}/{total} ({inside_words/total*100:.0f}%)\n"
+                    result_text += f"   • Слов распознано снаружи: {outside_words}/{total} ({outside_words/total*100:.0f}%)\n"
+                    result_text += f"   • Слов потеряно при изоляции: {lost_words}\n"
             
-            # Рекомендации
+                if 'leakage_percentage' in iso_metrics:
+                    leakage = iso_metrics['leakage_percentage']
+                    result_text += f"\n   🔄 УТЕЧКА РЕЧИ: {leakage:.1f}%\n"
+            
+                result_text += "\n"
+        
+            # 3. ВЕРДИКТ
+            result_text += "🏆 ВЕРДИКТ АТТЕСТАЦИИ:\n"
+            result_text += "-" * 40 + "\n"
+            verdict = overall.get('verdict', 'Н/Д')
+            color = overall.get('color', 'black')
+        
+            # Создаем цветные метки
+            if "ОТЛИЧНАЯ" in verdict:
+                result_text += f"🎉 {verdict}\n"
+            elif "ХОРОШАЯ" in verdict:
+                result_text += f"✅ {verdict}\n"
+            elif "УДОВЛЕТВОРИТЕЛЬНАЯ" in verdict:
+                result_text += f"⚠️ {verdict}\n"
+            elif "СЛАБАЯ" in verdict or "НЕЭФФЕКТИВНАЯ" in verdict:
+                result_text += f"❌ {verdict}\n"
+            else:
+                result_text += f"{verdict}\n"
+        
+            result_text += f"\n📋 Сводка: {overall.get('summary', 'Н/Д')}\n"
+        
+            if 'isolation_score' in overall:
+                result_text += f"🏅 Общая оценка: {overall.get('isolation_score', 0):.1f}/100\n"
+        
+            if 'composite_grade' in overall:
+                result_text += f"📈 Оценка: {overall.get('composite_grade', 'Н/Д')}\n"
+        
+            result_text += "\n"
+        
+            # 4. РЕКОМЕНДАЦИИ
             recommendations = overall.get('recommendations', [])
             if recommendations:
-                result_text += "\nРЕКОМЕНДАЦИИ:\n"
+                result_text += "💡 РЕКОМЕНДАЦИИ:\n"
+                result_text += "-" * 40 + "\n"
                 for i, rec in enumerate(recommendations, 1):
-                    result_text += f"  {i}. {rec}\n"
-            
-            result_text += "\n" + "=" * 60
-            
+                    # Добавляем эмодзи в зависимости от типа рекомендации
+                    if "усилить" in rec.lower() or "установить" in rec.lower() or "проверить" in rec.lower():
+                        result_text += f"🔧 {i}. {rec}\n"
+                    elif "обнаружена" in rec.lower() or "требуется" in rec.lower():
+                        result_text += f"⚠️ {i}. {rec}\n"
+                    elif "соответствует" in rec.lower() or "отличная" in rec.lower():
+                        result_text += f"✅ {i}. {rec}\n"
+                    else:
+                        result_text += f"{i}. {rec}\n"
+        
+            result_text += "\n" + "=" * 70 + "\n"
+            result_text += f"💡 ПРИМЕЧАНИЕ ДЛЯ ЭКСПЕРТА:\n"
+            result_text += f"   Для точной аттестации рекомендуется:\n"
+            result_text += f"   1. Провести 3-5 измерений в разных точках\n"
+            result_text += f"   2. Использовать разные фразы для тестирования\n"
+            result_text += f"   3. Учесть фоновый шум помещения\n"
+            result_text += "=" * 70
+        
             # Отображаем в интерфейсе
             self.result_text.config(state=tk.NORMAL)
             self.result_text.delete(1.0, tk.END)
             self.result_text.insert(tk.END, result_text)
-            
+        
             # Настраиваем цвет вердикта
-            self.result_text.tag_add("verdict", "3.0", "3.end")
-            self.result_text.tag_config("verdict", foreground=color, font=('Arial', 10, 'bold'))
-            
+            start_line = result_text.split('\n').index("ВЕРДИКТ АТТЕСТАЦИИ:") + 2
+            line_start = f"{start_line}.0"
+            line_end = f"{start_line}.end"
+        
+            self.result_text.tag_add("verdict", line_start, line_end)
+            self.result_text.tag_config("verdict", foreground=color, font=('Arial', 11, 'bold'))
+        
+            # Добавляем цвет для заголовков
+            self.result_text.tag_add("header", "1.0", "1.end")
+            self.result_text.tag_config("header", font=('Arial', 12, 'bold'), foreground='darkblue')
+        
             self.result_text.config(state=tk.DISABLED)
-            
+        
         except Exception as e:
             print(f"Ошибка отображения результатов: {e}")
+            import traceback
+            traceback.print_exc()
+        
+            # Показываем хотя бы ошибку
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.delete(1.0, tk.END)
+            self.result_text.insert(tk.END, f"Ошибка отображения результатов: {str(e)}")
+            self.result_text.config(state=tk.DISABLED)
     
     def refresh_recordings_list(self):
         """Обновить список записей"""
@@ -1478,7 +1572,7 @@ class AdvancedSoundTester:
             messagebox.showerror("Ошибка", f"Ошибка анализа: {e}")
     
     def recognize_speech(self):
-        """Распознавание речи в выбранной записи"""
+        """Распознавание речи для оценки звукоизоляции помещения"""
         try:
             if not self.recognizer:
                 messagebox.showwarning("Предупреждение", 
@@ -1486,24 +1580,24 @@ class AdvancedSoundTester:
                     "1. Установите модели через вкладку 'Движки'\n"
                     "2. Выберите движок распознавания")
                 return
-            
+        
             selection = self.recordings_tree.selection()
             if not selection:
                 messagebox.showwarning("Предупреждение", "Выберите запись для распознавания")
                 return
-            
+        
             # Получаем данные выбранной записи
             item = self.recordings_tree.item(selection[0])
             test_name = item['values'][0]
-            
+        
             # Находим файлы записи
             outside_path = os.path.join(self.recordings_folder, f"{test_name}_outside.wav")
             inside_path = os.path.join(self.recordings_folder, f"{test_name}_inside.wav")
-            
+        
             if not os.path.exists(outside_path) or not os.path.exists(inside_path):
                 messagebox.showerror("Ошибка", "Файлы записи не найдены")
                 return
-            
+        
             # Получаем эталонный текст
             reference_text = None
             metadata_path = os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
@@ -1511,75 +1605,323 @@ class AdvancedSoundTester:
                 with open(metadata_path, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
                     reference_text = metadata.get('reference_text')
-            
+        
+            if not reference_text:
+                # Запрашиваем текст, если его нет в метаданных
+                reference_text = simpledialog.askstring("Введите текст", 
+                    "Введите эталонный текст для проверки:")
+                if not reference_text:
+                    messagebox.showwarning("Предупреждение", "Текст не введен")
+                    return
+        
             # Распознавание речи
-            self.status_var.set("🎤 Распознавание речи...")
-            
-            result = self.recognizer.analyze_pair(outside_path, inside_path, reference_text)
-            
-            # Проверка текста
-            text_validation = self.analyzer._validate_spoken_text(
-                result.get('outside', {}).get('text', ''),
-                reference_text,
-                result.get('outside', {}).get('confidence', 0)
+            self.status_var.set("🎤 Распознавание речи для оценки изоляции...")
+        
+            # Показываем прогресс
+            progress_window = tk.Toplevel(self.root)
+            progress_window.title("Распознавание речи")
+            progress_window.geometry("400x150")
+            progress_window.transient(self.root)
+            progress_window.grab_set()
+        
+            # Центрируем
+            progress_window.update_idletasks()
+            x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
+            y = (self.root.winfo_screenheight() // 2) - (150 // 2)
+            progress_window.geometry(f'400x150+{x}+{y}')
+        
+            ttk.Label(progress_window, text="🔄 Распознавание речи...", 
+                    font=('Arial', 12, 'bold')).pack(pady=20)
+        
+            progress_var = tk.StringVar(value="Начинаю распознавание...")
+            ttk.Label(progress_window, textvariable=progress_var).pack()
+        
+            # Запускаем в отдельном потоке
+            result_container = []
+        
+            def recognize_thread():
+                try:
+                    progress_var.set("Распознаю внутреннюю запись...")
+                    result = self.recognizer.analyze_pair(outside_path, inside_path, reference_text)
+                    result_container.append(result)
+                    progress_var.set("✅ Распознавание завершено")
+                    time.sleep(1)
+                    progress_window.destroy()
+                except Exception as e:
+                    progress_var.set(f"❌ Ошибка: {str(e)[:50]}")
+                    result_container.append({'error': str(e)})
+                    time.sleep(2)
+                    progress_window.destroy()
+        
+            threading.Thread(target=recognize_thread, daemon=True).start()
+        
+            # Ждем завершения
+            self.root.wait_window(progress_window)
+        
+            if not result_container:
+                messagebox.showerror("Ошибка", "Распознавание не выполнено")
+                return
+        
+            result = result_container[0]
+        
+            if 'error' in result:
+                messagebox.showerror("Ошибка", f"Ошибка распознавания: {result['error']}")
+                self.status_var.set("❌ Ошибка распознавания")
+                return
+        
+            # ПРАВИЛЬНАЯ ЛОГИКА ДЛЯ АТТЕСТАЦИИ ПОМЕЩЕНИЯ:
+            # 1. Получаем распознанные тексты
+            inside_text = result.get('inside', {}).get('text', '')
+            outside_text = result.get('outside', {}).get('text', '')
+            inside_confidence = result.get('inside', {}).get('confidence', 0)
+            outside_confidence = result.get('outside', {}).get('confidence', 0)
+        
+            # 2. Проверяем эталон (внутри должен хорошо распознаваться)
+            inside_validation = self.analyzer._validate_spoken_text(
+                inside_text, reference_text, inside_confidence
             ) if reference_text else None
-            
-            # Отображаем результаты
-            result_text = "=" * 60 + "\n"
-            result_text += f"РАСПОЗНАВАНИЕ РЕЧИ: {test_name}\n"
-            result_text += f"ДВИЖОК: {result.get('engine', 'N/A')}\n"
-            result_text += "=" * 60 + "\n\n"
-            
-            # Текст снаружи
-            outside = result.get('outside', {})
-            result_text += "СНАРУЖИ:\n"
-            result_text += f"  Текст: {outside.get('text', 'N/A')}\n"
-            result_text += f"  Уверенность: {outside.get('confidence', 0):.2f}\n"
-            result_text += f"  Слов: {outside.get('word_count', 0)}\n\n"
-            
-            # Текст внутри
-            inside = result.get('inside', {})
-            result_text += "ВНУТРИ:\n"
-            result_text += f"  Текст: {inside.get('text', 'N/A')}\n"
-            result_text += f"  Уверенность: {inside.get('confidence', 0):.2f}\n"
-            result_text += f"  Слов: {inside.get('word_count', 0)}\n\n"
-            
-            # Проверка текста
-            if text_validation:
-                result_text += "ПРОВЕРКА ТЕКСТА (защита от спуфинга):\n"
-                if text_validation.get('valid', False):
-                    result_text += "  ✅ Текст соответствует заданному\n"
+        
+            # 3. Оцениваем изоляцию помещения
+            # Создаем структуру, похожую на speech_analysis
+            speech_analysis = {
+                'inside': {'text': inside_text, 'confidence': inside_confidence},
+                'outside': {'text': outside_text, 'confidence': outside_confidence},
+                'comparison': result.get('comparison', {})
+            }
+        
+            # Получаем аудиоанализ для правильного расчета дБ
+            audio_analysis = self.analyzer._perform_audio_analysis(outside_path, inside_path)
+        
+            # Оцениваем изоляцию помещения
+            isolation_assessment = self.analyzer._assess_room_isolation(
+                speech_analysis, reference_text, audio_analysis
+            )
+        
+            # 4. Отображаем результаты для аттестации
+            result_text = "=" * 70 + "\n"
+            result_text += f"ОЦЕНКА ЗВУКОИЗОЛЯЦИИ ПО РАСПОЗНАВАНИЮ РЕЧИ\n"
+            result_text += f"Тест: {test_name}\n"
+            result_text += f"Движок: {result.get('engine', 'N/A')}\n"
+            result_text += "=" * 70 + "\n\n"
+        
+            # 4.1 Проверка эталона (внутри)
+            result_text += "🔍 ПРОВЕРКА АУДИО ВНУТРИ ПОМЕЩЕНИЯ:\n"
+            result_text += "-" * 40 + "\n"
+        
+            if inside_validation:
+                if inside_validation.get('valid', False):
+                    result_text += "✅ Речь распознана корректно\n"
                 else:
-                    result_text += "  ❌ Текст НЕ соответствует!\n"
-                    result_text += f"  Совпадение: {text_validation.get('match_score', 0)*100:.1f}%\n"
-                result_text += f"  Слов в эталоне: {len(text_validation.get('detailed', {}).get('ref_words', []))}\n"
-                result_text += f"  Слов распознано: {len(text_validation.get('detailed', {}).get('rec_words', []))}\n\n"
+                    result_text += "⚠️ Проблемы с распознаванием!\n"
             
-            # Сравнение
-            comparison = result.get('comparison', {})
-            result_text += "СРАВНЕНИЕ:\n"
-            result_text += f"  WER (ошибок на слово): {comparison.get('wer', 0):.2%}\n"
+                result_text += f"   Совпадение с текстом: {inside_validation.get('match_score', 0)*100:.1f}%\n"
+                result_text += f"   Уверенность распознавания: {inside_validation.get('confidence', 0)*100:.1f}%\n"
             
-            if comparison.get('leakage_detected', False):
-                result_text += f"  ⚠️ ОБНАРУЖЕНА УТЕЧКА РЕЧИ!\n"
-                result_text += f"  Уровень утечки: {comparison.get('leakage_score', 0):.2f}\n"
+                if 'recognized' in inside_validation and inside_validation['recognized']:
+                    recognized = inside_validation['recognized']
+                    if len(recognized) > 80:
+                        recognized = recognized[:80] + "..."
+                    result_text += f"   Распознанный текст: \"{recognized}\"\n"
             else:
-                result_text += f"  ✅ Утечка не обнаружена\n"
+                result_text += "ℹ️ Проверка эталона не выполнена\n"
+        
+            result_text += "\n"
+        
+            # 4.2 Что распознано внутри и снаружи
+            result_text += "📝 РАСПОЗНАННЫЕ ТЕКСТЫ:\n"
+            result_text += "-" * 40 + "\n"
+        
+            result_text += f"🎤 ВНУТРИ: \n"
+            if inside_text:
+                if len(inside_text) > 100:
+                    inside_display = inside_text[:100] + "..."
+                else:
+                    inside_display = inside_text
+                result_text += f"   \"{inside_display}\"\n"
+                result_text += f"   Уверенность: {inside_confidence:.2f}\n"
+                result_text += f"   Слов: {len(inside_text.split())}\n"
+            else:
+                result_text += "   ❌ Не распознано\n"
+        
+            result_text += f"\n📡 СНАРУЖИ (тест изоляции):\n"
+            if outside_text:
+                if len(outside_text) > 100:
+                    outside_display = outside_text[:100] + "..."
+                else:
+                    outside_display = outside_text
+                result_text += f"   \"{outside_display}\"\n"
+                result_text += f"   Уверенность: {outside_confidence:.2f}\n"
+                result_text += f"   Слов: {len(outside_text.split())}\n"
+            else:
+                result_text += "   ✅ Не распознано (хорошая изоляция!)\n"
+        
+            result_text += "\n"
+        
+            # 4.3 Оценка изоляции
+            result_text += "📊 ОЦЕНКА ЗВУКОИЗОЛЯЦИИ ПО РАСПОЗНАВАНИЮ:\n"
+            result_text += "-" * 40 + "\n"
+        
+            if isolation_assessment and 'isolation_metrics' in isolation_assessment:
+                iso_metrics = isolation_assessment['isolation_metrics']
             
-            result_text += f"  Время обработки: {comparison.get('total_processing_time', 0):.1f} сек\n"
+                # Оценка по сходству текстов
+                if 'inside_similarity' in iso_metrics and 'outside_similarity' in iso_metrics:
+                    inside_sim = iso_metrics['inside_similarity'] * 100
+                    outside_sim = iso_metrics['outside_similarity'] * 100
+                
+                    result_text += f"   Сходство с эталоном:\n"
+                    result_text += f"   • Внутри: {inside_sim:.1f}%\n"
+                    result_text += f"   • Снаружи: {outside_sim:.1f}%\n"
+                
+                    if inside_sim > 0:
+                        efficiency = (1 - (outside_sim / inside_sim)) * 100
+                        result_text += f"   • Эффективность изоляции: {efficiency:.1f}%\n\n"
+                    
+                        if efficiency > 70:
+                            result_text += f"   🎉 ОТЛИЧНАЯ изоляция!\n"
+                        elif efficiency > 50:
+                            result_text += f"   ✅ ХОРОШАЯ изоляция\n"
+                        elif efficiency > 30:
+                            result_text += f"   ⚠️ УДОВЛЕТВОРИТЕЛЬНАЯ изоляция\n"
+                        else:
+                            result_text += f"   ❌ СЛАБАЯ изоляция\n"
             
-            result_text += "\n" + "=" * 60
+                # Оценка по словам
+                if 'words_total' in iso_metrics:
+                    total = iso_metrics['words_total']
+                    inside_words = iso_metrics.get('words_understood_inside', 0)
+                    outside_words = iso_metrics.get('words_understood_outside', 0)
+                    lost_words = iso_metrics.get('words_lost', 0)
+                
+                    result_text += f"\n   📝 АНАЛИЗ СЛОВ:\n"
+                    result_text += f"   • Всего слов: {total}\n"
+                    result_text += f"   • Распознано внутри: {inside_words}/{total} ({inside_words/total*100:.0f}%)\n"
+                    result_text += f"   • Распознано снаружи: {outside_words}/{total} ({outside_words/total*100:.0f}%)\n"
+                    result_text += f"   • Слов потеряно: {lost_words}\n"
+                
+                    if lost_words == 0 and outside_words == 0:
+                        result_text += f"   🎉 Идеальная изоляция - снаружи ничего не слышно!\n"
+                    elif lost_words > total * 0.5:
+                        result_text += f"   ✅ Хорошая изоляция - потеряно более половины слов\n"
+                    elif lost_words > 0:
+                        result_text += f"   ⚠️ Умеренная изоляция\n"
+                    else:
+                        result_text += f"   ❌ Слабая изоляция - все слова слышны снаружи\n"
             
+                # Оценка по дБ (из аудиоанализа)
+                if 'attenuation_db' in iso_metrics:
+                    attenuation = iso_metrics['attenuation_db']
+                    result_text += f"\n   🔊 ОСЛАБЛЕНИЕ ЗВУКА: {attenuation:.1f} дБ\n"
+                
+                    if attenuation >= 50:
+                        result_text += f"   🎉 Отличная звукоизоляция!\n"
+                    elif attenuation >= 40:
+                        result_text += f"   ✅ Хорошая звукоизоляция\n"
+                    elif attenuation >= 30:
+                        result_text += f"   ⚠️ Удовлетворительная изоляция\n"
+                    elif attenuation >= 20:
+                        result_text += f"   ⚠️ Слабая изоляция\n"
+                    else:
+                        result_text += f"   ❌ Неэффективная изоляция\n"
+        
+            # 4.4 Сравнительные метрики
+            if 'comparison' in result:
+                comparison = result['comparison']
+                if 'wer' in comparison:
+                    wer = comparison['wer']
+                    result_text += f"\n📈 СРАВНИТЕЛЬНЫЕ МЕТРИКИ:\n"
+                    result_text += f"-" * 40 + "\n"
+                    result_text += f"   WER (ошибок на слово): {wer:.2%}\n"
+                
+                    if wer > 0.8:
+                        result_text += f"   ✅ Отличная изоляция (высокий WER)\n"
+                    elif wer > 0.6:
+                        result_text += f"   ✅ Хорошая изоляция\n"
+                    elif wer > 0.4:
+                        result_text += f"   ⚠️ Умеренная изоляция\n"
+                    else:
+                        result_text += f"   ❌ Слабая изоляция (низкий WER)\n"
+                
+                    if comparison.get('leakage_detected', False):
+                        result_text += f"   ⚠️ ОБНАРУЖЕНА УТЕЧКА РЕЧИ!\n"
+        
+            # 4.5 Рекомендации
+            result_text += "\n💡 РЕКОМЕНДАЦИИ:\n"
+            result_text += "-" * 40 + "\n"
+        
+            # Генерируем рекомендации на основе результатов
+            if isolation_assessment and 'isolation_metrics' in isolation_assessment:
+                iso_metrics = isolation_assessment['isolation_metrics']
+            
+                if 'attenuation_db' in iso_metrics:
+                    attenuation = iso_metrics['attenuation_db']
+                
+                    if attenuation < 30:
+                        result_text += "1. 🔧 Усилить изоляцию стен и перекрытий\n"
+                        result_text += "2. 🔧 Установить звукопоглощающие материалы\n"
+                        result_text += "3. 🔧 Проверить герметичность окон и дверей\n"
+                    elif attenuation < 40:
+                        result_text += "1. ✅ Изоляция удовлетворительная\n"
+                        result_text += "2. 🔧 Рассмотреть дополнительную звукоизоляцию\n"
+                    else:
+                        result_text += "1. 🎉 Изоляция соответствует нормам\n"
+                        result_text += "2. ✅ Поддерживать текущее состояние\n"
+            
+                if 'words_lost' in iso_metrics:
+                    lost_words = iso_metrics['words_lost']
+                    if lost_words == 0:
+                        result_text += "3. 🎉 Идеальная изоляция речи!\n"
+                    elif lost_words < 3:
+                        result_text += "3. ✅ Хорошая изоляция речи\n"
+                    else:
+                        result_text += "3. ⚠️ Рекомендуется улучшить изоляцию речи\n"
+        
+            result_text += "\n" + "=" * 70 + "\n"
+            result_text += "💡 Для точной аттестации:\n"
+            result_text += "   • Проведите 3-5 измерений\n"
+            result_text += "   • Используйте разные фразы\n"
+            result_text += "   • Учтите фоновый шум\n"
+            result_text += "=" * 70
+        
             # Отображаем в интерфейсе
             self.result_text.config(state=tk.NORMAL)
             self.result_text.delete(1.0, tk.END)
             self.result_text.insert(tk.END, result_text)
+        
+            # Настраиваем форматирование
+            # Жирный заголовок
+            self.result_text.tag_add("header", "1.0", "1.end")
+            self.result_text.tag_config("header", font=('Arial', 12, 'bold'), foreground='darkblue')
+        
+            # Цветные разделы
+            import re
+            lines = result_text.split('\n')
+            for i, line in enumerate(lines, 1):
+                if "ПРОВЕРКА ЭТАЛОНА" in line:
+                    self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
+                    self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='darkgreen')
+                elif "РАСПОЗНАННЫЕ ТЕКСТЫ" in line:
+                    self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
+                    self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='darkblue')
+                elif "ОЦЕНКА ЗВУКОИЗОЛЯЦИИ" in line:
+                    self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
+                    self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='darkred')
+                elif "СРАВНИТЕЛЬНЫЕ МЕТРИКИ" in line:
+                    self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
+                    self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='purple')
+                elif "РЕКОМЕНДАЦИИ" in line:
+                    self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
+                    self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='darkorange')
+        
             self.result_text.config(state=tk.DISABLED)
-            
-            self.status_var.set("✅ Распознавание завершено")
-            
+        
+            self.status_var.set("✅ Распознавание завершено, оценка изоляции готова")
+        
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка распознавания: {e}")
+            import traceback
+            traceback.print_exc()
+            self.status_var.set("❌ Ошибка распознавания")
     
     def check_spoofing(self):
         """Проверка записи на спуфинг-атаки"""
