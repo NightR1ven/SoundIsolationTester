@@ -363,3 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 /SoundIsolationTester/models/whisper
 /SoundIsolationTester/models/vosk
+/SoundIsolationTester/recordings
+/SoundIsolationTester/diploma_dataset/condition_01
+/SoundIsolationTester/diploma_dataset
