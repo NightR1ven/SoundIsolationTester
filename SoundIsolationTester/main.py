@@ -12,6 +12,8 @@ import csv
 import subprocess
 import random
 import math
+import difflib
+import re
 
 # Функция для динамического импорта модулей
 def import_audio_core():
@@ -741,28 +743,34 @@ class AdvancedSoundTester:
         try:
             outside_idx = self.outside_combo.current()
             inside_idx = self.inside_combo.current()
-            
+        
             if outside_idx < 0 or inside_idx < 0:
                 messagebox.showwarning("Предупреждение", "Выберите оба устройства")
                 return
-            
+        
             test_name = self.test_name_var.get()
             duration = int(self.duration_var.get())
             reference_text = self.reference_text_var.get() if self.enable_text_check_var.get() else None
-            
+        
+            # ДОБАВЬТЕ ОТЛАДОЧНУЮ ПЕЧАТЬ
+            print(f"\n🎤 ==== НАЧАЛО ЗАПИСИ ====")
+            print(f"📝 Фраза из UI: '{reference_text}'")
+            print(f"✅ Проверка текста включена: {self.enable_text_check_var.get()}")
+            print(f"=================================\n")
+        
             # Проверка наличия текста для проверки
             if self.enable_text_check_var.get() and not reference_text.strip():
                 messagebox.showwarning("Предупреждение", 
                     "Введите фразу для проверки или отключите проверку текста.\n"
                     "Это необходимо для защиты от спуфинг-атак.")
                 return
-            
+        
             # Обновляем интерфейс
             self.record_btn.config(state=tk.DISABLED)
             self.stop_btn.config(state=tk.NORMAL)
             self.record_status.config(text="🔴 ИДЕТ ЗАПИСЬ", foreground="red")
             self.status_var.set("🎙️ Запись начата... Произнесите фразу снаружи!")
-            
+        
             # Показываем фразу для произнесения
             if reference_text:
                 messagebox.showinfo("Произнесите фразу", 
@@ -770,29 +778,29 @@ class AdvancedSoundTester:
                     f"📢 '{reference_text}'\n\n"
                     f"Система проверит соответствие текста ВНУТРИ помещения\n"
                     f"для защиты от спуфинг-атак (использования записанной речи).")
-            
+        
             # Показываем и активируем индикаторы
             self.show_indicators()
             self.outside_indicator.set_active(True)
             self.inside_indicator.set_active(True)
-            
+        
             # Запускаем мониторинг уровней
             self.monitoring_active = True
             self._start_level_monitoring()
-            
-            # Запускаем запись в отдельном потоке
+        
+            # Запускаем запись в отдельном потоке - ИСПРАВЛЕНО!
             self.recording_thread = threading.Thread(
                 target=self._perform_recording,
-                args=(outside_idx, inside_idx, duration, test_name)
+                args=(outside_idx, inside_idx, duration, test_name, reference_text)  # ← ДОБАВИЛИ reference_text!
             )
             self.recording_thread.daemon = True
             self.recording_thread.start()
-            
+        
             # Запускаем таймер с указанием общей длительности
             self.start_time = time.time()
             self.recording_duration = duration  # Сохраняем длительность
             self._update_timer()
-            
+        
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка начала записи: {e}")
             self._stop_recording_ui()
@@ -824,20 +832,25 @@ class AdvancedSoundTester:
             # Продолжаем мониторинг
             self.root.after(100, self._start_level_monitoring)
     
-    def _perform_recording(self, outside_idx, inside_idx, duration, test_name):
-        """Выполнить запись"""
+    def _perform_recording(self, outside_idx, inside_idx, duration, test_name, reference_text=None):
+        """Выполнить запись с сохранением фразы для проверки спуфинга"""
         try:
             # Сохраняем длительность для проверки
             self.recording_duration = duration
-            
+        
+            # ДОБАВЬТЕ ЭТУ ОТЛАДОЧНУЮ ПЕЧАТЬ
+            print(f"\n🔊 ==== ВЫПОЛНЕНИЕ ЗАПИСИ ====")
+            print(f"📝 Передаваемая фраза в audio_core: '{reference_text}'")
+            print(f"===================================\n")
+        
             success = self.audio_core.start_recording(
-                outside_idx, inside_idx, duration, test_name
+                outside_idx, inside_idx, duration, test_name, reference_text
             )
-            
+        
             if not success:
                 self.root.after(0, lambda: messagebox.showerror("Ошибка", "Не удалось начать запись"))
                 self.root.after(0, self._stop_recording_ui)
-                
+            
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Ошибка", f"Ошибка записи: {e}"))
             self.root.after(0, self._stop_recording_ui)
@@ -1572,7 +1585,7 @@ class AdvancedSoundTester:
             messagebox.showerror("Ошибка", f"Ошибка анализа: {e}")
     
     def recognize_speech(self):
-        """Распознавание речи для оценки звукоизоляции помещения"""
+        """Распознавание речи для оценки звукоизоляции помещения с проверкой спуфинга"""
         try:
             if not self.recognizer:
                 messagebox.showwarning("Предупреждение", 
@@ -1580,106 +1593,158 @@ class AdvancedSoundTester:
                     "1. Установите модели через вкладку 'Движки'\n"
                     "2. Выберите движок распознавания")
                 return
-        
+    
             selection = self.recordings_tree.selection()
             if not selection:
                 messagebox.showwarning("Предупреждение", "Выберите запись для распознавания")
                 return
-        
+    
             # Получаем данные выбранной записи
             item = self.recordings_tree.item(selection[0])
             test_name = item['values'][0]
-        
+    
             # Находим файлы записи
             outside_path = os.path.join(self.recordings_folder, f"{test_name}_outside.wav")
             inside_path = os.path.join(self.recordings_folder, f"{test_name}_inside.wav")
-        
+    
             if not os.path.exists(outside_path) or not os.path.exists(inside_path):
                 messagebox.showerror("Ошибка", "Файлы записи не найдены")
                 return
-        
-            # Получаем эталонный текст
+    
+            # Получаем эталонный текст из метаданных
             reference_text = None
             metadata_path = os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
             if os.path.exists(metadata_path):
                 with open(metadata_path, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
                     reference_text = metadata.get('reference_text')
-        
+    
+            # Если фразы нет в метаданных, запрашиваем её у пользователя
+            need_spoofing_check = False
             if not reference_text:
-                # Запрашиваем текст, если его нет в метаданных
-                reference_text = simpledialog.askstring("Введите текст", 
-                    "Введите эталонный текст для проверки:")
-                if not reference_text:
-                    messagebox.showwarning("Предупреждение", "Текст не введен")
-                    return
-        
+                # Спрашиваем, нужно ли проверять спуфинг
+                check_spoofing = messagebox.askyesno(
+                    "Проверка спуфинга",
+                    "Хотите проверить запись на спуфинг-атаку?\n\n"
+                    "Для этого нужно ввести фразу, которая должна быть произнесена в записи."
+                )
+            
+                if check_spoofing:
+                    reference_text = simpledialog.askstring("Введите фразу для проверки", 
+                        "Введите эталонный текст для проверки спуфинга:\n"
+                        "(фраза, которая должна быть произнесена в записи)")
+                
+                    if not reference_text:
+                        messagebox.showinfo("Информация", 
+                            "Проверка спуфинга отменена. Выполняется только распознавание речи.")
+                    else:
+                        need_spoofing_check = True
+            else:
+                # Фраза есть в метаданных - автоматически проверяем спуфинг
+                need_spoofing_check = True
+    
             # Распознавание речи
             self.status_var.set("🎤 Распознавание речи для оценки изоляции...")
-        
+    
             # Показываем прогресс
             progress_window = tk.Toplevel(self.root)
-            progress_window.title("Распознавание речи")
-            progress_window.geometry("400x150")
+            progress_window.title("Распознавание речи" + (" с проверкой спуфинга" if need_spoofing_check else ""))
+            progress_window.geometry("400x200")
             progress_window.transient(self.root)
             progress_window.grab_set()
-        
+    
             # Центрируем
             progress_window.update_idletasks()
             x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
-            y = (self.root.winfo_screenheight() // 2) - (150 // 2)
-            progress_window.geometry(f'400x150+{x}+{y}')
-        
-            ttk.Label(progress_window, text="🔄 Распознавание речи...", 
+            y = (self.root.winfo_screenheight() // 2) - (200 // 2)
+            progress_window.geometry(f'400x200+{x}+{y}')
+    
+            ttk.Label(progress_window, text="🔄 Распознавание речи..." + 
+                     ("\n(с проверкой спуфинга)" if need_spoofing_check else ""),
                     font=('Arial', 12, 'bold')).pack(pady=20)
-        
+    
             progress_var = tk.StringVar(value="Начинаю распознавание...")
             ttk.Label(progress_window, textvariable=progress_var).pack()
-        
+    
             # Запускаем в отдельном потоке
             result_container = []
-        
+            spoofing_result_container = []
+    
             def recognize_thread():
                 try:
+                    # Распознаем речь в обоих файлах
                     progress_var.set("Распознаю внутреннюю запись...")
+                    inside_result = self.recognizer.transcribe(inside_path)
+                
+                    progress_var.set("Распознаю внешнюю запись...")
+                    outside_result = self.recognizer.transcribe(outside_path)
+                
+                    # Получаем результаты сравнения
                     result = self.recognizer.analyze_pair(outside_path, inside_path, reference_text)
                     result_container.append(result)
+                
+                    # Если нужно проверить спуфинг
+                    if need_spoofing_check and reference_text and inside_result:
+                        progress_var.set("Проверка спуфинга...")
+                    
+                        # Сравниваем распознанную речь с эталоном
+                        match_score = self._calculate_text_match(inside_result.text, reference_text)
+                        passed = match_score >= 0.8  # 80% порог
+                    
+                        spoofing_result = {
+                            'performed': True,
+                            'success': True,
+                            'test_name': test_name,
+                            'reference_text': reference_text,
+                            'recognized_text': inside_result.text,
+                            'match_score': match_score,
+                            'match_percent': match_score * 100,
+                            'passed': passed,
+                            'threshold': 0.8,
+                            'confidence': inside_result.confidence if hasattr(inside_result, 'confidence') else 0,
+                            'engine': result.get('engine', 'N/A')
+                        }
+                        spoofing_result_container.append(spoofing_result)
+                
                     progress_var.set("✅ Распознавание завершено")
                     time.sleep(1)
                     progress_window.destroy()
+                
                 except Exception as e:
                     progress_var.set(f"❌ Ошибка: {str(e)[:50]}")
                     result_container.append({'error': str(e)})
                     time.sleep(2)
                     progress_window.destroy()
-        
+    
             threading.Thread(target=recognize_thread, daemon=True).start()
-        
+    
             # Ждем завершения
             self.root.wait_window(progress_window)
-        
+    
             if not result_container:
                 messagebox.showerror("Ошибка", "Распознавание не выполнено")
                 return
-        
+    
             result = result_container[0]
-        
+    
             if 'error' in result:
                 messagebox.showerror("Ошибка", f"Ошибка распознавания: {result['error']}")
                 self.status_var.set("❌ Ошибка распознавания")
                 return
-        
+    
             # ПРАВИЛЬНАЯ ЛОГИКА ДЛЯ АТТЕСТАЦИИ ПОМЕЩЕНИЯ:
             # 1. Получаем распознанные тексты
             inside_text = result.get('inside', {}).get('text', '')
             outside_text = result.get('outside', {}).get('text', '')
             inside_confidence = result.get('inside', {}).get('confidence', 0)
             outside_confidence = result.get('outside', {}).get('confidence', 0)
-        
+    
             # 2. Проверяем эталон (внутри должен хорошо распознаваться)
-            inside_validation = self.analyzer._validate_spoken_text(
-                inside_text, reference_text, inside_confidence
-            ) if reference_text else None
+            inside_validation = None
+            if reference_text:
+                inside_validation = self.analyzer._validate_spoken_text(
+                    inside_text, reference_text, inside_confidence
+                )
         
             # 3. Оцениваем изоляцию помещения
             # Создаем структуру, похожую на speech_analysis
@@ -1688,35 +1753,79 @@ class AdvancedSoundTester:
                 'outside': {'text': outside_text, 'confidence': outside_confidence},
                 'comparison': result.get('comparison', {})
             }
-        
+    
             # Получаем аудиоанализ для правильного расчета дБ
             audio_analysis = self.analyzer._perform_audio_analysis(outside_path, inside_path)
-        
+    
             # Оцениваем изоляцию помещения
             isolation_assessment = self.analyzer._assess_room_isolation(
                 speech_analysis, reference_text, audio_analysis
             )
-        
-            # 4. Отображаем результаты для аттестации
+    
+            # 4. Отображаем результаты для аттестации с проверкой спуфинга
             result_text = "=" * 70 + "\n"
             result_text += f"ОЦЕНКА ЗВУКОИЗОЛЯЦИИ ПО РАСПОЗНАВАНИЮ РЕЧИ\n"
             result_text += f"Тест: {test_name}\n"
             result_text += f"Движок: {result.get('engine', 'N/A')}\n"
-            result_text += "=" * 70 + "\n\n"
         
-            # 4.1 Проверка эталона (внутри)
+            # Добавляем информацию о проверке спуфинга
+            if spoofing_result_container:
+                spoofing_result = spoofing_result_container[0]
+                result_text += f"Проверка спуфинга: {'✅ ВКЛЮЧЕНА' if spoofing_result.get('success') else '❌ ОШИБКА'}\n"
+            elif reference_text:
+                result_text += f"Проверка спуфинга: ℹ️ ВЫПОЛНЕНА (через анализатор)\n"
+            else:
+                result_text += f"Проверка спуфинга: ⚠️ НЕ ВЫПОЛНЕНА (нет эталонной фразы)\n"
+            
+            result_text += "=" * 70 + "\n\n"
+    
+            # 4.1 Проверка эталона (внутри) и спуфинга
             result_text += "🔍 ПРОВЕРКА АУДИО ВНУТРИ ПОМЕЩЕНИЯ:\n"
             result_text += "-" * 40 + "\n"
         
-            if inside_validation:
+            # Если есть проверка спуфинга, показываем её
+            if spoofing_result_container:
+                spoofing_result = spoofing_result_container[0]
+                if spoofing_result.get('success'):
+                    if spoofing_result.get('passed'):
+                        result_text += "✅ СПУФИНГ-АТАКА НЕ ОБНАРУЖЕНА\n"
+                    else:
+                        result_text += "❌ ВОЗМОЖНА СПУФИНГ-АТАКА!\n"
+                
+                    result_text += f"   Совпадение с эталоном: {spoofing_result.get('match_percent', 0):.1f}%\n"
+                    result_text += f"   Порог прохождения: {spoofing_result.get('threshold', 0)*100}%\n"
+                    result_text += f"   Уверенность распознавания: {spoofing_result.get('confidence', 0)*100:.1f}%\n"
+                
+                    # Показываем фразы
+                    ref_text = spoofing_result.get('reference_text', '')
+                    if len(ref_text) > 80:
+                        ref_text = ref_text[:77] + "..."
+                    result_text += f"   Эталонная фраза: \"{ref_text}\"\n"
+                
+                    rec_text = spoofing_result.get('recognized_text', '')
+                    if len(rec_text) > 80:
+                        rec_text = rec_text[:77] + "..."
+                    result_text += f"   Распознанная фраза: \"{rec_text}\"\n"
+                
+                    # Рекомендации по спуфингу
+                    if not spoofing_result.get('passed', False):
+                        result_text += "\n   ⚠️ РЕКОМЕНДАЦИИ ПО СПУФИНГУ:\n"
+                        if spoofing_result.get('match_percent', 0) >= 60:
+                            result_text += "   • Возможны ошибки распознавания\n"
+                            result_text += "   • Повторите запись с более четкой речью\n"
+                        else:
+                            result_text += "   • Высокая вероятность спуфинг-атаки\n"
+                            result_text += "   • Проверьте источник звука\n"
+                            result_text += "   • Убедитесь, что используется живая речь\n"
+            elif inside_validation:
                 if inside_validation.get('valid', False):
                     result_text += "✅ Речь распознана корректно\n"
                 else:
                     result_text += "⚠️ Проблемы с распознаванием!\n"
-            
+        
                 result_text += f"   Совпадение с текстом: {inside_validation.get('match_score', 0)*100:.1f}%\n"
                 result_text += f"   Уверенность распознавания: {inside_validation.get('confidence', 0)*100:.1f}%\n"
-            
+        
                 if 'recognized' in inside_validation and inside_validation['recognized']:
                     recognized = inside_validation['recognized']
                     if len(recognized) > 80:
@@ -1724,13 +1833,13 @@ class AdvancedSoundTester:
                     result_text += f"   Распознанный текст: \"{recognized}\"\n"
             else:
                 result_text += "ℹ️ Проверка эталона не выполнена\n"
-        
+    
             result_text += "\n"
-        
+    
             # 4.2 Что распознано внутри и снаружи
             result_text += "📝 РАСПОЗНАННЫЕ ТЕКСТЫ:\n"
             result_text += "-" * 40 + "\n"
-        
+    
             result_text += f"🎤 ВНУТРИ: \n"
             if inside_text:
                 if len(inside_text) > 100:
@@ -1742,7 +1851,7 @@ class AdvancedSoundTester:
                 result_text += f"   Слов: {len(inside_text.split())}\n"
             else:
                 result_text += "   ❌ Не распознано\n"
-        
+    
             result_text += f"\n📡 СНАРУЖИ (тест изоляции):\n"
             if outside_text:
                 if len(outside_text) > 100:
@@ -1754,29 +1863,29 @@ class AdvancedSoundTester:
                 result_text += f"   Слов: {len(outside_text.split())}\n"
             else:
                 result_text += "   ✅ Не распознано (хорошая изоляция!)\n"
-        
+    
             result_text += "\n"
-        
+    
             # 4.3 Оценка изоляции
             result_text += "📊 ОЦЕНКА ЗВУКОИЗОЛЯЦИИ ПО РАСПОЗНАВАНИЮ:\n"
             result_text += "-" * 40 + "\n"
-        
+    
             if isolation_assessment and 'isolation_metrics' in isolation_assessment:
                 iso_metrics = isolation_assessment['isolation_metrics']
-            
+        
                 # Оценка по сходству текстов
                 if 'inside_similarity' in iso_metrics and 'outside_similarity' in iso_metrics:
                     inside_sim = iso_metrics['inside_similarity'] * 100
                     outside_sim = iso_metrics['outside_similarity'] * 100
-                
+            
                     result_text += f"   Сходство с эталоном:\n"
                     result_text += f"   • Внутри: {inside_sim:.1f}%\n"
                     result_text += f"   • Снаружи: {outside_sim:.1f}%\n"
-                
+            
                     if inside_sim > 0:
                         efficiency = (1 - (outside_sim / inside_sim)) * 100
                         result_text += f"   • Эффективность изоляции: {efficiency:.1f}%\n\n"
-                    
+                
                         if efficiency > 70:
                             result_text += f"   🎉 ОТЛИЧНАЯ изоляция!\n"
                         elif efficiency > 50:
@@ -1785,20 +1894,20 @@ class AdvancedSoundTester:
                             result_text += f"   ⚠️ УДОВЛЕТВОРИТЕЛЬНАЯ изоляция\n"
                         else:
                             result_text += f"   ❌ СЛАБАЯ изоляция\n"
-            
+        
                 # Оценка по словам
                 if 'words_total' in iso_metrics:
                     total = iso_metrics['words_total']
                     inside_words = iso_metrics.get('words_understood_inside', 0)
                     outside_words = iso_metrics.get('words_understood_outside', 0)
                     lost_words = iso_metrics.get('words_lost', 0)
-                
+            
                     result_text += f"\n   📝 АНАЛИЗ СЛОВ:\n"
                     result_text += f"   • Всего слов: {total}\n"
                     result_text += f"   • Распознано внутри: {inside_words}/{total} ({inside_words/total*100:.0f}%)\n"
                     result_text += f"   • Распознано снаружи: {outside_words}/{total} ({outside_words/total*100:.0f}%)\n"
                     result_text += f"   • Слов потеряно: {lost_words}\n"
-                
+            
                     if lost_words == 0 and outside_words == 0:
                         result_text += f"   🎉 Идеальная изоляция - снаружи ничего не слышно!\n"
                     elif lost_words > total * 0.5:
@@ -1807,12 +1916,12 @@ class AdvancedSoundTester:
                         result_text += f"   ⚠️ Умеренная изоляция\n"
                     else:
                         result_text += f"   ❌ Слабая изоляция - все слова слышны снаружи\n"
-            
+        
                 # Оценка по дБ (из аудиоанализа)
                 if 'attenuation_db' in iso_metrics:
                     attenuation = iso_metrics['attenuation_db']
                     result_text += f"\n   🔊 ОСЛАБЛЕНИЕ ЗВУКА: {attenuation:.1f} дБ\n"
-                
+            
                     if attenuation >= 50:
                         result_text += f"   🎉 Отличная звукоизоляция!\n"
                     elif attenuation >= 40:
@@ -1823,7 +1932,7 @@ class AdvancedSoundTester:
                         result_text += f"   ⚠️ Слабая изоляция\n"
                     else:
                         result_text += f"   ❌ Неэффективная изоляция\n"
-        
+    
             # 4.4 Сравнительные метрики
             if 'comparison' in result:
                 comparison = result['comparison']
@@ -1832,7 +1941,7 @@ class AdvancedSoundTester:
                     result_text += f"\n📈 СРАВНИТЕЛЬНЫЕ МЕТРИКИ:\n"
                     result_text += f"-" * 40 + "\n"
                     result_text += f"   WER (ошибок на слово): {wer:.2%}\n"
-                
+            
                     if wer > 0.8:
                         result_text += f"   ✅ Отличная изоляция (высокий WER)\n"
                     elif wer > 0.6:
@@ -1841,65 +1950,90 @@ class AdvancedSoundTester:
                         result_text += f"   ⚠️ Умеренная изоляция\n"
                     else:
                         result_text += f"   ❌ Слабая изоляция (низкий WER)\n"
-                
+            
                     if comparison.get('leakage_detected', False):
                         result_text += f"   ⚠️ ОБНАРУЖЕНА УТЕЧКА РЕЧИ!\n"
-        
-            # 4.5 Рекомендации
+    
+            # 4.5 Рекомендации (обновленные с учетом спуфинга)
             result_text += "\n💡 РЕКОМЕНДАЦИИ:\n"
             result_text += "-" * 40 + "\n"
+    
+            # Добавляем рекомендации по спуфингу
+            if spoofing_result_container:
+                spoofing_result = spoofing_result_container[0]
+                if spoofing_result.get('passed', False):
+                    result_text += "1. 🛡️ Спуфинг-атака НЕ обнаружена\n"
+                else:
+                    result_text += "1. ⚠️ ВОЗМОЖНА СПУФИНГ-АТАКА\n"
+                    result_text += "   • Проверьте источник звука\n"
+                    result_text += "   • Убедитесь в использовании живой речи\n"
+                    result_text += "   • Повторите тест с новой фразой\n"
         
-            # Генерируем рекомендации на основе результатов
+            # Стандартные рекомендации по изоляции
             if isolation_assessment and 'isolation_metrics' in isolation_assessment:
                 iso_metrics = isolation_assessment['isolation_metrics']
-            
+        
                 if 'attenuation_db' in iso_metrics:
                     attenuation = iso_metrics['attenuation_db']
-                
-                    if attenuation < 30:
-                        result_text += "1. 🔧 Усилить изоляцию стен и перекрытий\n"
-                        result_text += "2. 🔧 Установить звукопоглощающие материалы\n"
-                        result_text += "3. 🔧 Проверить герметичность окон и дверей\n"
-                    elif attenuation < 40:
-                        result_text += "1. ✅ Изоляция удовлетворительная\n"
-                        result_text += "2. 🔧 Рассмотреть дополнительную звукоизоляцию\n"
-                    else:
-                        result_text += "1. 🎉 Изоляция соответствует нормам\n"
-                        result_text += "2. ✅ Поддерживать текущее состояние\n"
             
+                    if attenuation < 30:
+                        result_text += "2. 🔧 Усилить изоляцию стен и перекрытий\n"
+                        result_text += "3. 🔧 Установить звукопоглощающие материалы\n"
+                        result_text += "4. 🔧 Проверить герметичность окон и дверей\n"
+                    elif attenuation < 40:
+                        result_text += "2. ✅ Изоляция удовлетворительная\n"
+                        result_text += "3. 🔧 Рассмотреть дополнительную звукоизоляцию\n"
+                    else:
+                        result_text += "2. 🎉 Изоляция соответствует нормам\n"
+                        result_text += "3. ✅ Поддерживать текущее состояние\n"
+        
                 if 'words_lost' in iso_metrics:
                     lost_words = iso_metrics['words_lost']
                     if lost_words == 0:
-                        result_text += "3. 🎉 Идеальная изоляция речи!\n"
+                        result_text += "4. 🎉 Идеальная изоляция речи!\n"
                     elif lost_words < 3:
-                        result_text += "3. ✅ Хорошая изоляция речи\n"
+                        result_text += "4. ✅ Хорошая изоляция речи\n"
                     else:
-                        result_text += "3. ⚠️ Рекомендуется улучшить изоляцию речи\n"
-        
+                        result_text += "4. ⚠️ Рекомендуется улучшить изоляцию речи\n"
+    
             result_text += "\n" + "=" * 70 + "\n"
             result_text += "💡 Для точной аттестации:\n"
             result_text += "   • Проведите 3-5 измерений\n"
             result_text += "   • Используйте разные фразы\n"
             result_text += "   • Учтите фоновый шум\n"
-            result_text += "=" * 70
         
+            # Добавляем примечание о спуфинге
+            if need_spoofing_check and spoofing_result_container:
+                spoofing_result = spoofing_result_container[0]
+                result_text += "\n🛡️ Защита от спуфинга:\n"
+                result_text += "   • Всегда используйте уникальные фразы\n"
+                result_text += "   • Проверяйте соответствие текста\n"
+                result_text += "   • Анализируйте технические показатели\n"
+            
+            result_text += "=" * 70
+    
             # Отображаем в интерфейсе
             self.result_text.config(state=tk.NORMAL)
             self.result_text.delete(1.0, tk.END)
             self.result_text.insert(tk.END, result_text)
-        
+    
             # Настраиваем форматирование
             # Жирный заголовок
             self.result_text.tag_add("header", "1.0", "1.end")
             self.result_text.tag_config("header", font=('Arial', 12, 'bold'), foreground='darkblue')
-        
+    
             # Цветные разделы
             import re
             lines = result_text.split('\n')
             for i, line in enumerate(lines, 1):
-                if "ПРОВЕРКА ЭТАЛОНА" in line:
+                if "ПРОВЕРКА АУДИО" in line:
                     self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
-                    self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='darkgreen')
+                    color = "darkgreen"
+                    if spoofing_result_container:
+                        spoofing_result = spoofing_result_container[0]
+                        if not spoofing_result.get('passed', False):
+                            color = "darkred"
+                    self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground=color)
                 elif "РАСПОЗНАННЫЕ ТЕКСТЫ" in line:
                     self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
                     self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='darkblue')
@@ -1912,11 +2046,18 @@ class AdvancedSoundTester:
                 elif "РЕКОМЕНДАЦИИ" in line:
                     self.result_text.tag_add(f"section{i}", f"{i}.0", f"{i}.end")
                     self.result_text.tag_config(f"section{i}", font=('Arial', 11, 'bold'), foreground='darkorange')
-        
+    
             self.result_text.config(state=tk.DISABLED)
-        
-            self.status_var.set("✅ Распознавание завершено, оценка изоляции готова")
-        
+    
+            # Показываем отдельное окно с результатом проверки спуфинга
+            if spoofing_result_container:
+                self.root.after(500, lambda: self._show_detailed_spoofing_result(
+                    spoofing_result_container[0], test_name
+                ))
+    
+            self.status_var.set("✅ Распознавание завершено, оценка изоляции готова" + 
+                               (" (проверка спуфинга выполнена)" if spoofing_result_container else ""))
+    
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка распознавания: {e}")
             import traceback
@@ -3299,6 +3440,218 @@ class AdvancedSoundTester:
         
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка завершения: {e}")
+
+    def _calculate_text_match(self, recognized, reference):
+        """Вычисление процента совпадения текста для проверки спуфинга"""
+        try:
+            import difflib
+            import re
+        
+            if not recognized or not reference:
+                return 0.0
+        
+            # Очищаем текст
+            def clean_text(text):
+                text = str(text).lower()
+                text = text.replace('ё', 'е')
+                # Удаляем знаки препинания и лишние пробелы
+                text = re.sub(r'[^\w\s]', '', text)
+                text = ' '.join(text.split())
+                return text
+        
+            clean_rec = clean_text(recognized)
+            clean_ref = clean_text(reference)
+        
+            # Используем SequenceMatcher для сравнения
+            matcher = difflib.SequenceMatcher(None, clean_rec, clean_ref)
+            similarity = matcher.ratio()
+        
+            # Дополнительная проверка по ключевым словам
+            ref_words = set(clean_ref.split())
+            rec_words = set(clean_rec.split())
+        
+            if ref_words:
+                word_match = len(ref_words.intersection(rec_words)) / len(ref_words)
+                # Комбинируем оба метода
+                final_score = (similarity * 0.7) + (word_match * 0.3)
+            else:
+                final_score = similarity
+        
+            return min(max(final_score, 0.0), 1.0)
+        
+        except Exception as e:
+            print(f"Ошибка сравнения текстов: {e}")
+            return 0.0
+
+    def _show_detailed_spoofing_result(self, spoofing_result, test_name):
+        """Показать детальные результаты проверки спуфинга в отдельном окне"""
+        try:
+            result_window = tk.Toplevel(self.root)
+            result_window.title(f"Результат проверки спуфинга: {test_name}")
+            result_window.geometry("600x500")
+        
+            # Центрируем
+            result_window.update_idletasks()
+            x = (self.root.winfo_screenwidth() // 2) - (600 // 2)
+            y = (self.root.winfo_screenheight() // 2) - (500 // 2)
+            result_window.geometry(f'600x500+{x}+{y}')
+        
+            # Заголовок
+            if spoofing_result.get('passed', False):
+                title_text = "✅ СПУФИНГ-АТАКА НЕ ОБНАРУЖЕНА"
+                title_color = "green"
+            else:
+                title_text = "⚠️ ВОЗМОЖНА СПУФИНГ-АТАКА"
+                title_color = "red"
+            
+            ttk.Label(result_window, text=title_text, 
+                     font=('Arial', 14, 'bold'), foreground=title_color).pack(pady=10)
+        
+            # Информация о тесте
+            info_frame = ttk.LabelFrame(result_window, text="📋 ИНФОРМАЦИЯ", padding="10")
+            info_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+            ttk.Label(info_frame, text=f"Тест: {test_name}").pack(anchor=tk.W)
+            ttk.Label(info_frame, text=f"Движок распознавания: {spoofing_result.get('engine', 'N/A')}").pack(anchor=tk.W)
+        
+            # Результат проверки
+            result_frame = ttk.LabelFrame(result_window, text="📊 РЕЗУЛЬТАТ ПРОВЕРКИ", padding="10")
+            result_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+            match_percent = spoofing_result.get('match_percent', 0)
+            threshold = spoofing_result.get('threshold', 0.8) * 100
+        
+            # Прогресс бар для наглядности
+            progress_frame = ttk.Frame(result_frame)
+            progress_frame.pack(fill=tk.X, pady=5)
+        
+            ttk.Label(progress_frame, text=f"Совпадение: {match_percent:.1f}%").pack(side=tk.LEFT)
+            ttk.Label(progress_frame, text=f"Порог: {threshold:.0f}%", 
+                     foreground="gray").pack(side=tk.RIGHT)
+        
+            # Сам прогресс бар
+            progress_bar = ttk.Progressbar(result_frame, length=500, mode='determinate')
+            progress_bar.pack(fill=tk.X, pady=5)
+            progress_bar['value'] = min(match_percent, 100)
+        
+            # Цвет прогресс бара
+            if match_percent >= 80:
+                style_name = "green.Horizontal.TProgressbar"
+            elif match_percent >= 60:
+                style_name = "yellow.Horizontal.TProgressbar"
+            else:
+                style_name = "red.Horizontal.TProgressbar"
+        
+            # Создаем стили для цветных прогресс баров
+            style = ttk.Style()
+            style.configure("green.Horizontal.TProgressbar", 
+                           background='green', troughcolor='lightgray')
+            style.configure("yellow.Horizontal.TProgressbar", 
+                           background='orange', troughcolor='lightgray')
+            style.configure("red.Horizontal.TProgressbar", 
+                           background='red', troughcolor='lightgray')
+        
+            progress_bar.configure(style=style_name)
+        
+            # Дополнительные метрики
+            metrics_frame = ttk.Frame(result_frame)
+            metrics_frame.pack(fill=tk.X, pady=10)
+        
+            ttk.Label(metrics_frame, text=f"Уверенность распознавания: {spoofing_result.get('confidence', 0)*100:.1f}%").pack(anchor=tk.W)
+        
+            # Фразы
+            phrases_frame = ttk.LabelFrame(result_window, text="📝 СРАВНЕНИЕ ФРАЗ", padding="10")
+            phrases_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+            # Эталонная фраза
+            ttk.Label(phrases_frame, text="Эталонная фраза:", 
+                     font=('Arial', 10, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        
+            ref_frame = ttk.Frame(phrases_frame)
+            ref_frame.pack(fill=tk.X, pady=(0, 10))
+        
+            ref_text = scrolledtext.ScrolledText(ref_frame, height=2, wrap=tk.WORD)
+            ref_text.pack(fill=tk.X)
+            ref_text.insert(tk.END, spoofing_result.get('reference_text', ''))
+            ref_text.config(state=tk.DISABLED)
+        
+            # Распознанная фраза
+            ttk.Label(phrases_frame, text="Распознанная фраза:", 
+                     font=('Arial', 10, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        
+            rec_frame = ttk.Frame(phrases_frame)
+            rec_frame.pack(fill=tk.BOTH, expand=True)
+        
+            rec_text = scrolledtext.ScrolledText(rec_frame, height=3, wrap=tk.WORD)
+            rec_text.pack(fill=tk.BOTH, expand=True)
+            rec_text.insert(tk.END, spoofing_result.get('recognized_text', ''))
+            rec_text.config(state=tk.DISABLED)
+        
+            # Интерпретация
+            interpretation_frame = ttk.LabelFrame(result_window, text="💡 ИНТЕРПРЕТАЦИЯ", padding="10")
+            interpretation_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+            if spoofing_result.get('passed', False):
+                interpretation = "✅ Речь соответствует эталонной фразе.\n" \
+                               "Спуфинг-атака маловероятна."
+            else:
+                if match_percent >= 60:
+                    interpretation = "⚠️ Умеренное несоответствие.\n" \
+                                   "Возможны ошибки распознавания или плохое качество записи."
+                else:
+                    interpretation = "❌ Высокое несоответствие.\n" \
+                                   "Возможна спуфинг-атака или речь не соответствует фразе."
+        
+            ttk.Label(interpretation_frame, text=interpretation, 
+                     justify=tk.LEFT).pack(anchor=tk.W)
+        
+            # Рекомендации
+            if not spoofing_result.get('passed', False):
+                rec_frame = ttk.LabelFrame(result_window, text="🔧 РЕКОМЕНДАЦИИ", padding="10")
+                rec_frame.pack(fill=tk.X, padx=10, pady=5)
+            
+                recommendations = []
+                if match_percent >= 60:
+                    recommendations = [
+                        "• Повторите запись с более четким произношением",
+                        "• Увеличьте громкость речи",
+                        "• Уменьшите фоновый шум",
+                        "• Используйте более простую фразу"
+                    ]
+                else:
+                    recommendations = [
+                        "• Проверьте источник звука (возможна записанная речь)",
+                        "• Убедитесь, что используется живая речь",
+                        "• Повторите тест с новой уникальной фразой",
+                        "• Проверьте микрофон и настройки записи"
+                    ]
+            
+                for rec in recommendations:
+                    ttk.Label(rec_frame, text=rec, justify=tk.LEFT).pack(anchor=tk.W)
+        
+            # Кнопки
+            btn_frame = ttk.Frame(result_window)
+            btn_frame.pack(pady=10)
+        
+            def save_result():
+                filename = filedialog.asksaveasfilename(
+                    defaultextension=".json",
+                    filetypes=[("JSON файлы", "*.json"), ("Текстовые файлы", "*.txt")],
+                    initialfile=f"{test_name}_spoofing_result.json"
+                )
+            
+                if filename:
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump(spoofing_result, f, ensure_ascii=False, indent=2)
+                    messagebox.showinfo("Успех", f"Результат сохранен в {filename}")
+        
+            ttk.Button(btn_frame, text="💾 Сохранить результат", 
+                      command=save_result).pack(side=tk.LEFT, padx=5)
+            ttk.Button(btn_frame, text="❌ Закрыть", 
+                      command=result_window.destroy).pack(side=tk.LEFT, padx=5)
+        
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка отображения результатов спуфинга: {e}")
 
     def on_closing(self):
         """Обработчик закрытия окна"""
