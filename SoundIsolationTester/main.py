@@ -534,12 +534,12 @@ class AdvancedSoundTester:
         # ФРАЗА ДЛЯ ПРОВЕРКИ (НОВОЕ)
         ttk.Label(params_frame, text="Фраза для проверки:", font=('Arial', 10, 'bold')).grid(row=2, column=0, sticky=tk.W, pady=5)
         self.reference_text_var = tk.StringVar(value="Красный трактор стоит на зеленом поле сорок два")
-        self.reference_entry = ttk.Entry(params_frame, textvariable=self.reference_text_var, width=40, font=('Arial', 10))
+        self.reference_entry = ttk.Entry(params_frame, textvariable=self.reference_text_var, width=60, font=('Arial', 10))
         self.reference_entry.grid(row=2, column=1, padx=10, pady=5)
         
         # Кнопка для генерации случайной фразы
         ttk.Button(params_frame, text="🎲 Случайная фраза", 
-                  command=self.generate_random_phrase, width=15).grid(row=2, column=2, padx=5, pady=5)
+                  command=self.generate_random_phrase, width=20).grid(row=2, column=2, padx=5, pady=5)
         
         # Опции
         self.enable_analysis_var = tk.BooleanVar(value=True)
@@ -1003,12 +1003,10 @@ class AdvancedSoundTester:
         action_frame.pack(fill=tk.X, pady=10)
         
         actions = [
-            ("📊 Базовый анализ", self.analyze_selected),
             ("🎤 Распознать речь", self.recognize_speech),
-            ("🛡️ Проверить спуфинг", self.check_spoofing),
-            ("🗑️ Удалить запись", self.delete_recording),
             ("📋 Отчет", self.generate_report),
-            ("🎵 Воспроизвести", self.play_recording)
+            ("🎵 Воспроизвести", self.play_recording),
+            ("🗑️ Удалить запись", self.delete_recording)
         ]
         
         for text, command in actions:
@@ -2184,562 +2182,735 @@ class AdvancedSoundTester:
             messagebox.showerror("Ошибка", f"Ошибка удаления: {e}")
     
     def generate_report(self):
-        """Сгенерировать отчет по выбранной записи"""
+        """Сгенерировать отчет по выбранной записи с данными распознавания"""
         try:
+            # 1. Проверяем, есть ли выбранная запись
             selection = self.recordings_tree.selection()
             if not selection:
                 messagebox.showwarning("Предупреждение", "Выберите запись для отчета")
                 return
-            
-            # Получаем данные выбранной записи
+    
+            # 2. Получаем название теста
             item = self.recordings_tree.item(selection[0])
             test_name = item['values'][0]
+    
+            # 3. Парсим данные ИЗ ТЕКСТА РЕЗУЛЬТАТОВ в интерфейсе
+            report_data = self._parse_results_from_displayed_text(test_name)
+    
+            # 4. Если нет данных в интерфейсе, спрашиваем, распознать ли речь
+            if not report_data['has_speech_data']:
+                response = messagebox.askyesno(
+                    "Нет данных распознавания",
+                    "В результатах анализа нет данных распознавания речи.\n\n"
+                    "Хотите сначала выполнить распознавание речи?"
+                )
             
-            # Создаем диалог выбора формата
-            format_window = tk.Toplevel(self.root)
-            format_window.title("Выбор формата отчета")
-            format_window.geometry("400x200")
-            format_window.transient(self.root)
-            format_window.grab_set()
-            
-            # Центрируем
-            format_window.update_idletasks()
-            x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
-            y = (self.root.winfo_screenheight() // 2) - (200 // 2)
-            format_window.geometry(f'400x200+{x}+{y}')
-            
-            ttk.Label(format_window, text="📄 ВЫБЕРИТЕ ФОРМАТ ОТЧЕТА", 
-                     font=('Arial', 12, 'bold')).pack(pady=10)
-            
-            format_var = tk.StringVar(value="html")
-            
-            def create_report(format_type):
-                format_window.destroy()
-                self._create_report_file(test_name, format_type)
-            
-            ttk.Radiobutton(format_window, text="📄 HTML (для печати)", 
-                           value="html", variable=format_var).pack(pady=5)
-            ttk.Radiobutton(format_window, text="📝 Текстовый (TXT)", 
-                           value="txt", variable=format_var).pack(pady=5)
-            ttk.Radiobutton(format_window, text="📊 Excel (XLSX)", 
-                           value="excel", variable=format_var).pack(pady=5)
-            
-            ttk.Button(format_window, text="Создать отчет", 
-                      command=lambda: create_report(format_var.get())).pack(pady=15)
-            
+                if response:
+                    # Запускаем распознавание
+                    self.recognize_speech()
+                    # Ждем немного и пытаемся снова
+                    self.root.after(2000, lambda: self.generate_report())
+                    return
+                else:
+                    # Создаем отчет без данных распознавания
+                    report_data = self._create_basic_report_data(test_name)
+    
+            # 5. Показываем окно выбора формата
+            self._show_format_selection_dialog(test_name, report_data)
+    
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка генерации отчета: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _parse_results_from_displayed_text(self, test_name):
+        """Парсить данные распознавания из текста, отображаемого в интерфейсе"""
+        report_data = {
+            'test_name': test_name,
+            'has_speech_data': False,
+            'has_spoofing_data': False,
+            'has_analysis_data': False,
+            'speech_results': {},
+            'spoofing_results': {},
+            'analysis_results': {},
+            'parsed_sections': [],
+            'metadata': self._load_test_metadata(test_name)
+        }
+
+        try:
+            # Получаем весь текст из поля результатов
+            result_text = self.result_text.get("1.0", tk.END)
+
+            if not result_text or result_text.strip() == "":
+                print("⚠️ Текст результатов пуст")
+                return report_data
+
+            # Разбиваем на строки для анализа
+            lines = result_text.split('\n')
+
+            print(f"🔍 Анализирую {len(lines)} строк...")
+
+            # Проходим по всем строкам и ищем нужные данные
+            for i, line in enumerate(lines):
+                line = line.strip()
+
+                # ============ РАСПОЗНАННЫЕ ТЕКСТЫ И УВЕРЕННОСТЬ ============
+                if line == "📝 РАСПОЗНАННЫЕ ТЕКСТЫ:":
+                    report_data['parsed_sections'].append('speech')
+                    # Ищем следующие строки с данными
+                    j = i + 1
+                    while j < len(lines) and not lines[j].startswith("📊"):
+                        line_text = lines[j].strip()
+                    
+                        # Текст внутри помещения
+                        if "🎤 ВНУТРИ:" in line_text:
+                            # Ищем текст на следующей строке
+                            if j + 1 < len(lines):
+                                inside_line = lines[j + 1].strip()
+                                if inside_line and not inside_line.startswith("Уверенность:"):
+                                    # Убираем кавычки если есть
+                                    inside_text = inside_line.strip('"').strip()
+                                    if inside_text and inside_text != "❌ Не распознано":
+                                        report_data['speech_results']['inside_text'] = inside_text
+                                        report_data['has_speech_data'] = True
+                    
+                        # Уверенность внутри
+                        elif "Уверенность:" in line_text and j > 0 and "🎤 ВНУТРИ" in lines[j-1]:
+                            confidence = line_text.split(":")[1].strip()
+                            report_data['speech_results']['inside_confidence'] = confidence
+                            report_data['has_speech_data'] = True
+                    
+                        # Текст снаружи помещения
+                        elif "📡 СНАРУЖИ" in line_text:
+                            # Ищем текст на следующей строке
+                            if j + 1 < len(lines):
+                                outside_line = lines[j + 1].strip()
+                                if outside_line and not outside_line.startswith("Уверенность:"):
+                                    # Убираем кавычки если есть
+                                    outside_text = outside_line.strip('"').strip()
+                                    if outside_text and outside_text != "❌ Не распознано":
+                                        report_data['speech_results']['outside_text'] = outside_text
+                                        report_data['has_speech_data'] = True
+                    
+                        # Уверенность снаружи
+                        elif "Уверенность:" in line_text and j > 0 and "📡 СНАРУЖИ" in lines[j-1]:
+                            confidence = line_text.split(":")[1].strip()
+                            report_data['speech_results']['outside_confidence'] = confidence
+                            report_data['has_speech_data'] = True
+                    
+                        j += 1
+            
+                # ============ ПРОВЕРКА СПУФИНГА ============
+                elif line.startswith("🔍 ПРОВЕРКА АУДИО ВНУТРИ ПОМЕЩЕНИЯ:"):
+                    report_data['parsed_sections'].append('spoofing')
+                    j = i + 1
+                    while j < len(lines) and not lines[j].startswith("📝"):
+                        if "Совпадение с эталоном:" in lines[j]:
+                            match = lines[j].split(":")[1].strip()
+                            report_data['spoofing_results']['match_score'] = match
+                            report_data['has_spoofing_data'] = True
+                    
+                        elif "Порог прохождения:" in lines[j]:
+                            threshold = lines[j].split(":")[1].strip()
+                            report_data['spoofing_results']['threshold'] = threshold
+                    
+                        elif "Уверенность распознавания:" in lines[j]:
+                            confidence = lines[j].split(":")[1].strip()
+                            report_data['spoofing_results']['confidence'] = confidence
+                    
+                        elif "Эталонная фраза:" in lines[j]:
+                            # Берем текст в кавычках
+                            import re
+                            match = re.search(r'"(.*?)"', lines[j])
+                            if match:
+                                report_data['spoofing_results']['reference_text'] = match.group(1)
+                    
+                        elif "Распознанная фраза:" in lines[j]:
+                            # Берем текст в кавычках
+                            import re
+                            match = re.search(r'"(.*?)"', lines[j])
+                            if match:
+                                report_data['spoofing_results']['recognized_text'] = match.group(1)
+                    
+                        j += 1
+            
+                # ============ АНАЛИЗ ЗВУКОИЗОЛЯЦИИ ============
+                elif line.startswith("📊 ОЦЕНКА ЗВУКОИЗОЛЯЦИИ"):
+                    report_data['parsed_sections'].append('analysis')
+                    j = i + 1
+                    while j < len(lines) and not lines[j].startswith("📈"):
+                        if "Ослабление звука:" in lines[j]:
+                            # Ищем число с "дБ"
+                            import re
+                            match = re.search(r'(\d+\.?\d*)\s*дБ', lines[j])
+                            if match:
+                                report_data['analysis_results']['attenuation_db'] = match.group(1)
+                                report_data['has_analysis_data'] = True
+                    
+                        elif "Эффективность изоляции:" in lines[j]:
+                            # Ищем число с "%"
+                            import re
+                            match = re.search(r'(\d+\.?\d*)\s*%', lines[j])
+                            if match:
+                                report_data['analysis_results']['isolation_efficiency'] = match.group(1)
+                    
+                        elif "Всего слов в фразе:" in lines[j]:
+                            words = lines[j].split(":")[1].strip()
+                            report_data['analysis_results']['total_words'] = words
+                    
+                        elif "Слов потеряно при изоляции:" in lines[j]:
+                            lost = lines[j].split(":")[1].strip()
+                            report_data['analysis_results']['lost_words'] = lost
+                    
+                        j += 1
+        
+            # ============ АЛЬТЕРНАТИВНЫЙ ПОИСК (регулярные выражения) ============
+            if not report_data['has_speech_data']:
+                # Пробуем найти через регулярные выражения
+                import re
+            
+                # Ищем текст внутри помещения
+                inside_match = re.search(r'🎤 ВНУТРИ:\s*\n\s*"([^"]+)"', result_text, re.IGNORECASE)
+                if inside_match:
+                    report_data['speech_results']['inside_text'] = inside_match.group(1).strip()
+                    report_data['has_speech_data'] = True
+            
+                # Ищем текст снаружи помещения
+                outside_match = re.search(r'📡 СНАРУЖИ.*?:\s*\n\s*"([^"]+)"', result_text, re.IGNORECASE | re.DOTALL)
+                if outside_match:
+                    report_data['speech_results']['outside_text'] = outside_match.group(1).strip()
+                    report_data['has_speech_data'] = True
+        
+            # ============ ЛОГИРОВАНИЕ РЕЗУЛЬТАТОВ ПАРСИНГА ============
+            print(f"📊 Результаты парсинга для {test_name}:")
+            print(f"  • Данные речи: {report_data['has_speech_data']}")
+            print(f"  • Данные спуфинга: {report_data['has_spoofing_data']}")
+            print(f"  • Данные анализа: {report_data['has_analysis_data']}")
+            print(f"  • Разделы: {report_data['parsed_sections']}")
+        
+            if report_data['has_speech_data']:
+                print(f"  • Внутри: '{report_data['speech_results'].get('inside_text', 'Нет')}'")
+                print(f"  • Снаружи: '{report_data['speech_results'].get('outside_text', 'Нет')}'")
     
-    def _create_report_file(self, test_name, format_type):
+        except Exception as e:
+            print(f"❌ Ошибка парсинга текста: {e}")
+            import traceback
+            traceback.print_exc()
+    
+        return report_data
+    
+    def _create_basic_report_data(self, test_name):
+        """Создать базовые данные отчета без распознавания"""
+        metadata = self._load_test_metadata(test_name)
+    
+        return {
+            'test_name': test_name,
+            'has_speech_data': False,
+            'has_spoofing_data': False,
+            'has_analysis_data': False,
+            'speech_results': {},
+            'spoofing_results': {},
+            'analysis_results': {},
+            'parsed_sections': ['basic'],
+            'metadata': metadata
+        }
+
+    def _create_report_file(self, test_name, format_type, report_data):
         """Создать файл отчета в указанном формате"""
         try:
-            # Находим метаданные
-            metadata_path = os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
-            if not os.path.exists(metadata_path):
-                messagebox.showerror("Ошибка", "Метаданные записи не найдены")
-                return
-            
-            # Читаем метаданные
-            with open(metadata_path, 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
-            
-            # Ищем файлы анализа
-            analysis_path = os.path.join(self.recordings_folder, f"{test_name}_analysis.json")
-            analysis_data = None
-            if os.path.exists(analysis_path):
-                with open(analysis_path, 'r', encoding='utf-8') as f:
-                    analysis_data = json.load(f)
-            
+            # Создаем папку reports если не существует
+            reports_folder = "reports"
+            os.makedirs(reports_folder, exist_ok=True)
+        
             # Запрашиваем место сохранения
             if format_type == "html":
                 ext = ".html"
                 filetypes = [("HTML файлы", "*.html"), ("Все файлы", "*.*")]
-                initialfile = f"{test_name}_report.html"
+                # Предлагаем сохранить в папке reports по умолчанию
+                initial_dir = reports_folder
+                initial_file = f"{test_name}_report{ext}"
             elif format_type == "excel":
                 ext = ".xlsx"
                 filetypes = [("Excel файлы", "*.xlsx"), ("Все файлы", "*.*")]
-                initialfile = f"{test_name}_report.xlsx"
+                initial_dir = reports_folder
+                initial_file = f"{test_name}_report{ext}"
+            elif format_type == "csv":
+                ext = ".csv"
+                filetypes = [("CSV файлы", "*.csv"), ("Все файлы", "*.*")]
+                initial_dir = reports_folder
+                initial_file = f"{test_name}_report{ext}"
+            elif format_type == "json":
+                ext = ".json"
+                filetypes = [("JSON файлы", "*.json"), ("Все файлы", "*.*")]
+                initial_dir = reports_folder
+                initial_file = f"{test_name}_report{ext}"
             else:
                 ext = ".txt"
                 filetypes = [("Текстовые файлы", "*.txt"), ("Все файлы", "*.*")]
-                initialfile = f"{test_name}_report.txt"
-            
+                initial_dir = reports_folder
+                initial_file = f"{test_name}_report{ext}"
+        
             filename = filedialog.asksaveasfilename(
                 defaultextension=ext,
                 filetypes=filetypes,
-                initialfile=initialfile
+                initialdir=initial_dir,
+                initialfile=initial_file
             )
-            
+        
             if not filename:
                 return
-            
+        
+            # Загружаем метаданные из файла
+            metadata = self._load_test_metadata(test_name)
+        
             # Создаем отчет в выбранном формате
             if format_type == "html":
-                self._create_html_report(metadata, analysis_data, filename)
+                self._create_html_report(metadata, filename, report_data)
             elif format_type == "excel":
-                self._create_excel_report(metadata, analysis_data, filename)
+                self._create_excel_report(metadata, filename, report_data)
+            elif format_type == "csv":
+                self._create_csv_report(metadata, filename, report_data)
+            elif format_type == "json":
+                self._create_json_report(metadata, filename, report_data)
             else:
-                self._create_text_report(metadata, analysis_data, filename)
-            
-            # Показываем сообщение об успехе с опцией открытия
-            if format_type == "html":
-                open_result = messagebox.askyesno("Успех", 
-                    f"HTML-отчет сохранен:\n{filename}\n\n"
-                    f"Открыть в браузере для печати?")
-                
-                if open_result:
-                    webbrowser.open('file://' + os.path.abspath(filename))
-            else:
-                messagebox.showinfo("Успех", f"Отчет сохранен:\n{filename}")
-            
-            self.status_var.set("📋 Отчет сгенерирован")
-            
+                self._create_text_report(metadata, filename, report_data)
+        
+            # Показываем результат
+            messagebox.showinfo("Успех", f"Отчет сохранен:\n{filename}")
+            self.status_var.set(f"📋 Отчет создан: {os.path.basename(filename)}")
+        
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка создания отчета: {e}")
     
-    def _create_html_report(self, metadata, analysis_data, filename):
-        """Создать HTML отчет для печати"""
-        
+    def _create_html_report(self, metadata, filename, report_data):
+        """Создать HTML отчет"""
+        # Убедимся, что metadata - это словарь, а не строка
+        if isinstance(metadata, str):
+            # Если передана строка (например, имя файла), загружаем метаданные
+            metadata = self._load_test_metadata(metadata)
+
         # Получаем данные из метаданных
-        test_name = metadata.get('test_name', 'Неизвестный тест')
-        timestamp = metadata.get('timestamp', 'Нет данных')
-        duration = metadata.get('duration', 0)
-        sample_rate = metadata.get('sample_rate', 0)
-        reference_text = metadata.get('reference_text', 'Не задан')
+        test_name = metadata.get('test_name', 'Неизвестный тест') if isinstance(metadata, dict) else 'Неизвестный тест'
+        timestamp = metadata.get('timestamp', 'Нет данных') if isinstance(metadata, dict) else 'Нет данных'
+        duration = metadata.get('duration', 0) if isinstance(metadata, dict) else 0
+        sample_rate = metadata.get('sample_rate', 0) if isinstance(metadata, dict) else 0
+        reference_text = metadata.get('reference_text', 'Не задан') if isinstance(metadata, dict) else 'Не задан'
+
+        # Используем report_data для заполнения данных распознавания
+        speech_section = ""
+        if report_data['has_speech_data']:
+            speech_results = report_data['speech_results']
         
-        # Получаем результаты анализа если есть
-        overall_score = "Н/Д"
-        text_validation = None
-        if analysis_data:
-            results = analysis_data.get('results', {})
-            overall = results.get('overall_assessment', {})
-            overall_score = overall.get('verdict', 'Н/Д')
-            grade = overall.get('grade', 'Н/Д')
-            color = overall.get('color', 'black')
-            recommendations = overall.get('recommendations', [])
-            text_validation = results.get('text_validation')
+            # Получаем тексты и уверенности
+            inside_text = speech_results.get('inside_text', 'Н/Д')
+            inside_confidence = speech_results.get('inside_confidence', 'Н/Д')
+            outside_text = speech_results.get('outside_text', 'Н/Д')
+            outside_confidence = speech_results.get('outside_confidence', 'Н/Д')
         
-        # Создаем HTML документ
-        html_content = f'''<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Отчет по тесту звукоизоляции - {test_name}</title>
-    <style>
-        @media print {{
-            @page {{
-                margin: 2cm;
-                size: A4;
-            }}
-            body {{
-                font-size: 12pt;
-            }}
-            .page-break {{
-                page-break-before: always;
-            }}
-            .no-print {{
-                display: none;
-            }}
-        }}
+            # Форматируем для отображения
+            inside_display = f'"{inside_text}"' if inside_text != 'Н/Д' else 'Н/Д'
+            outside_display = f'"{outside_text}"' if outside_text != 'Н/Д' else 'Н/Д'
         
-        * {{
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }}
-        
-        body {{
-            font-family: 'Arial', sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 210mm;
-            margin: 0 auto;
-            padding: 20mm;
-            background-color: #f9f9f9;
-        }}
-        
-        .header {{
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 3px solid #2c3e50;
-        }}
-        
-        .header h1 {{
-            color: #2c3e50;
-            font-size: 24pt;
-            margin-bottom: 10px;
-        }}
-        
-        .header .subtitle {{
-            color: #7f8c8d;
-            font-size: 14pt;
-        }}
-        
-        .info-card {{
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            border-left: 5px solid #3498db;
-        }}
-        
-        .result-card {{
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            border-left: 5px solid #2ecc71;
-        }}
-        
-        .verdict-card {{
-            background: white;
-            border-radius: 8px;
-            padding: 30px;
-            margin: 30px 0;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            text-align: center;
-            border: 2px solid #e74c3c;
-        }}
-        
-        .verdict-card h2 {{
-            color: #e74c3c;
-            font-size: 20pt;
-            margin-bottom: 15px;
-        }}
-        
-        .metrics-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }}
-        
-        .metric-item {{
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 6px;
-            text-align: center;
-            border: 1px solid #dee2e6;
-        }}
-        
-        .metric-value {{
-            font-size: 24pt;
-            font-weight: bold;
-            color: #2c3e50;
-            margin: 10px 0;
-        }}
-        
-        .metric-label {{
-            color: #6c757d;
-            font-size: 11pt;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }}
-        
-        h2 {{
-            color: #2c3e50;
-            margin: 25px 0 15px 0;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #ecf0f1;
-            font-size: 18pt;
-        }}
-        
-        h3 {{
-            color: #34495e;
-            margin: 20px 0 10px 0;
-            font-size: 14pt;
-        }}
-        
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 11pt;
-        }}
-        
-        table th {{
-            background: #2c3e50;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            font-weight: bold;
-        }}
-        
-        table td {{
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
-        }}
-        
-        table tr:nth-child(even) {{
-            background: #f8f9fa;
-        }}
-        
-        .recommendations {{
-            background: #fff3cd;
-            border-left: 5px solid #ffc107;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 6px;
-        }}
-        
-        .recommendations ul {{
-            padding-left: 20px;
-            margin: 10px 0;
-        }}
-        
-        .recommendations li {{
-            margin: 8px 0;
-        }}
-        
-        .footer {{
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 2px solid #ecf0f1;
-            text-align: center;
-            color: #7f8c8d;
-            font-size: 10pt;
-        }}
-        
-        .print-button {{
-            display: block;
-            width: 200px;
-            margin: 30px auto;
-            padding: 12px 24px;
-            background: #3498db;
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            border: none;
-            font-size: 12pt;
-        }}
-        
-        .print-button:hover {{
-            background: #2980b9;
-        }}
-        
-        .badge {{
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 10pt;
-            font-weight: bold;
-            margin: 0 5px;
-        }}
-        
-        .badge-success {{
-            background: #d4edda;
-            color: #155724;
-        }}
-        
-        .badge-warning {{
-            background: #fff3cd;
-            color: #856404;
-        }}
-        
-        .badge-danger {{
-            background: #f8d7da;
-            color: #721c24;
-        }}
-        
-        .grade {{
-            font-size: 32pt;
-            font-weight: bold;
-            color: #2c3e50;
-            text-align: center;
-            margin: 20px 0;
-        }}
-        
-        .text-validation {{
-            background: #e8f4fd;
-            border-left: 5px solid #3498db;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 6px;
-        }}
-        
-        .text-validation.success {{
-            background: #d4edda;
-            border-left: 5px solid #28a745;
-        }}
-        
-        .text-validation.warning {{
-            background: #fff3cd;
-            border-left: 5px solid #ffc107;
-        }}
-        
-        .text-validation.danger {{
-            background: #f8d7da;
-            border-left: 5px solid #dc3545;
-        }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>📊 ОТЧЕТ ПО ТЕСТУ ЗВУКОИЗОЛЯЦИИ</h1>
-        <div class="subtitle">Защита от спуфинг-атак - Sound Isolation Tester v3.14</div>
-    </div>
-    
-    <div class="info-card">
-        <h2>📋 ИНФОРМАЦИЯ О ТЕСТЕ</h2>
-        <div class="metrics-grid">
-            <div class="metric-item">
-                <div class="metric-label">Название теста</div>
-                <div class="metric-value">{test_name}</div>
-            </div>
-            <div class="metric-item">
-                <div class="metric-label">Дата и время</div>
-                <div class="metric-value">{timestamp}</div>
-            </div>
-            <div class="metric-item">
-                <div class="metric-label">Длительность</div>
-                <div class="metric-value">{duration:.1f} сек</div>
-            </div>
-            <div class="metric-item">
-                <div class="metric-label">Частота дискретизации</div>
-                <div class="metric-value">{sample_rate} Гц</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="info-card">
-        <h2>🛡️ ПРОВЕРКА ЗАЩИТЫ ОТ СПУФИНГА</h2>
-        <div class="text-validation {'success' if text_validation and text_validation.get('valid') else 'danger' if text_validation else 'warning'}">
-            <h3>Проверка соответствия текста</h3>
-            <p><strong>Заданная фраза:</strong> "{reference_text}"</p>
-            '''
-        
-        if text_validation:
-            recognized_text = text_validation.get('recognized', 'Не распознано')
-            match_score = text_validation.get('match_score', 0) * 100
-            is_valid = text_validation.get('valid', False)
-            
-            if is_valid:
-                html_content += f'''
-                <p><strong>Результат:</strong> ✅ Текст успешно проверен</p>
-                <p><strong>Распознанный текст:</strong> "{recognized_text}"</p>
-                <p><strong>Совпадение:</strong> {match_score:.1f}%</p>
-                <p>✅ Система защищена от спуфинг-атак (текст соответствует)</p>
-                '''
-            else:
-                html_content += f'''
-                <p><strong>Результат:</strong> ❌ Текст не соответствует</p>
-                <p><strong>Распознанный текст:</strong> "{recognized_text}"</p>
-                <p><strong>Совпадение:</strong> {match_score:.1f}%</p>
-                <p>⚠️ <strong>ВНИМАНИЕ:</strong> Возможна спуфинг-атака!</p>
-                <p>Рекомендуется провести дополнительную проверку источника звука.</p>
-                '''
-        else:
-            html_content += '''
-                <p><strong>Результат:</strong> ⚠️ Проверка не выполнена</p>
-                <p>Для данной записи не выполнена проверка текста на соответствие.</p>
-                '''
-        
-        html_content += '''
-        </div>
-    </div>
-    
-    <div class="result-card">
-        <h2>📈 РЕЗУЛЬТАТЫ АНАЛИЗА</h2>
-        '''
-        
-        # Добавляем результаты анализа если есть
-        if analysis_data:
-            results = analysis_data.get('results', {})
-            overall = results.get('overall_assessment', {})
-            detailed = results.get('detailed_metrics', {})
-            
-            html_content += f'''
-            <div class="verdict-card">
-                <h2>ВЕРДИКТ</h2>
-                <div class="grade">{overall.get('verdict', 'Н/Д')}</div>
-                <p style="font-size: 14pt; margin-top: 10px;">{overall.get('summary', 'Нет данных')}</p>
-            </div>
-            
-            <h3>Детальные метрики</h3>
-            '''
-            
-            # Базовые метрики
-            if detailed.get('basic'):
-                basic = detailed['basic']
-                html_content += f'''
+            speech_section = f'''
+            <div class="info-card">
+                <h2>🎤 РЕЗУЛЬТАТЫ РАСПОЗНАВАНИЯ РЕЧИ</h2>
                 <table>
                     <tr>
                         <th>Параметр</th>
                         <th>Значение</th>
-                        <th>Оценка</th>
+                    </tr>
+                    <tr>
+                        <td>Текст внутри помещения</td>
+                        <td>{inside_display}</td>
+                    </tr>
+                    <tr>
+                        <td>Текст снаружи помещения</td>
+                        <td>{outside_display}</td>
+                    </tr>
+                </table>
+            </div>
+            '''
+        else:
+            speech_section = '''
+            <div class="info-card">
+                <h2>🎤 РЕЗУЛЬТАТЫ РАСПОЗНАВАНИЯ РЕЧИ</h2>
+                <table>
+                    <tr>
+                        <th>Параметр</th>
+                        <th>Значение</th>
+                    </tr>
+                    <tr>
+                        <td>Текст внутри помещения</td>
+                        <td>Н/Д (данные распознавания отсутствуют)</td>
+                    </tr>
+                    <tr>
+                        <td>Уверенность внутри</td>
+                        <td>Н/Д</td>
+                    </tr>
+                    <tr>
+                        <td>Текст снаружи помещения</td>
+                        <td>Н/Д</td>
+                    </tr>
+                    <tr>
+                        <td>Уверенность снаружи</td>
+                        <td>Н/Д</td>
+                    </tr>
+                </table>
+            </div>
+            '''
+    
+        spoofing_section = ""
+        if report_data['has_spoofing_data']:
+            spoofing_results = report_data['spoofing_results']
+            spoofing_section = f'''
+            <div class="info-card">
+                <h2>🛡️ РЕЗУЛЬТАТЫ ПРОВЕРКИ СПУФИНГА</h2>
+                <table>
+                    <tr>
+                        <th>Параметр</th>
+                        <th>Значение</th>
+                    </tr>
+                    <tr>
+                        <td>Совпадение с эталоном</td>
+                        <td>{spoofing_results.get('match_score', 'Н/Д')}</td>
+                    </tr>
+                    <tr>
+                        <td>Порог прохождения</td>
+                        <td>{spoofing_results.get('threshold', 'Н/Д')}</td>
+                    </tr>
+                    <tr>
+                        <td>Уверенность распознавания</td>
+                        <td>{spoofing_results.get('confidence', 'Н/Д')}</td>
+                    </tr>
+                </table>
+            </div>
+            '''
+    
+        analysis_section = ""
+        if report_data['has_analysis_data']:
+            analysis_results = report_data['analysis_results']
+            analysis_section = f'''
+            <div class="info-card">
+                <h2>📊 РЕЗУЛЬТАТЫ АНАЛИЗА ЗВУКОИЗОЛЯЦИИ</h2>
+                <table>
+                    <tr>
+                        <th>Параметр</th>
+                        <th>Значение</th>
                     </tr>
                     <tr>
                         <td>Ослабление звука</td>
-                        <td>{basic.get('attenuation_db', 0):.1f} дБ</td>
-                        <td>{basic.get('attenuation_rating', 'Н/Д')}</td>
+                        <td>{analysis_results.get('attenuation_db', 'Н/Д')} дБ</td>
                     </tr>
                     <tr>
-                        <td>Качество изоляции</td>
-                        <td>{basic.get('isolation_quality', 'Н/Д')}</td>
-                        <td>{basic.get('isolation_rating', 'Н/Д')}</td>
+                        <td>Эффективность изоляции</td>
+                        <td>{analysis_results.get('isolation_efficiency', 'Н/Д')}</td>
                     </tr>
                     <tr>
-                        <td>Корреляция сигналов</td>
-                        <td>{basic.get('correlation', 0):.3f}</td>
-                        <td>{basic.get('correlation_rating', 'Н/Д')}</td>
+                        <td>Всего слов в фразе</td>
+                        <td>{analysis_results.get('total_words', 'Н/Д')}</td>
+                    </tr>
+                    <tr>
+                        <td>Слов потеряно при изоляции</td>
+                        <td>{analysis_results.get('lost_words', 'Н/Д')}</td>
                     </tr>
                 </table>
-                '''
-            
-            # Композитные оценки
-            if detailed.get('composite_scores'):
-                composite = detailed['composite_scores']
-                html_content += f'''
-                <h3>Композитные оценки</h3>
-                <div class="metrics-grid">
-                    <div class="metric-item">
-                        <div class="metric-label">Общая оценка</div>
-                        <div class="metric-value">{composite.get('total_score', 0):.1f}/100</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-label">Оценка по шкале</div>
-                        <div class="metric-value">{composite.get('grade', 'Н/Д')}</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-label">Эффективность</div>
-                        <div class="metric-value">{composite.get('effectiveness_percent', 0):.1f}%</div>
-                    </div>
-                </div>
-                '''
-            
-            # Рекомендации
-            recommendations = overall.get('recommendations', [])
-            if recommendations:
-                html_content += '''
-                <div class="recommendations">
-                    <h3>🏆 РЕКОМЕНДАЦИИ ПО УЛУЧШЕНИЮ</h3>
-                    <ul>
-                '''
-                for rec in recommendations:
-                    html_content += f'<li>{rec}</li>'
-                html_content += '</ul></div>'
-        
-        # Если анализа нет, показываем информационное сообщение
-        else:
-            html_content += '''
-            <div style="text-align: center; padding: 40px; background: #f8f9fa; border-radius: 8px;">
-                <h3>⚠️ Анализ не выполнен</h3>
-                <p>Для данной записи не выполнен анализ звукоизоляции.</p>
-                <p>Выполните анализ через вкладку "АНАЛИЗ" для получения подробных результатов.</p>
             </div>
             '''
+    
+        # Полный HTML
+        html_content = f'''<!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Отчет по тесту звукоизоляции - {test_name}</title>
+        <style>
+            /* Стили остаются без изменений */
+            @media print {{
+                @page {{
+                    margin: 2cm;
+                    size: A4;
+                }}
+                body {{
+                    font-size: 12pt;
+                }}
+                .page-break {{
+                    page-break-before: always;
+                }}
+                .no-print {{
+                    display: none;
+                }}
+            }}
         
-        # Технические данные
-        html_content += f'''
+            * {{
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }}
+        
+            body {{
+                font-family: 'Arial', sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 210mm;
+                margin: 0 auto;
+                padding: 20mm;
+                background-color: #f9f9f9;
+            }}
+        
+            .header {{
+                text-align: center;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 3px solid #2c3e50;
+            }}
+        
+            .header h1 {{
+                color: #2c3e50;
+                font-size: 24pt;
+                margin-bottom: 10px;
+            }}
+        
+            .header .subtitle {{
+                color: #7f8c8d;
+                font-size: 14pt;
+            }}
+        
+            .info-card {{
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px 0;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-left: 5px solid #3498db;
+            }}
+        
+            .result-card {{
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px 0;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-left: 5px solid #2ecc71;
+            }}
+        
+            .verdict-card {{
+                background: white;
+                border-radius: 8px;
+                padding: 30px;
+                margin: 30px 0;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                text-align: center;
+                border: 2px solid #e74c3c;
+            }}
+        
+            .verdict-card h2 {{
+                color: #e74c3c;
+                font-size: 20pt;
+                margin-bottom: 15px;
+            }}
+        
+            .metrics-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 15px;
+                margin: 20px 0;
+            }}
+        
+            .metric-item {{
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 6px;
+                text-align: center;
+                border: 1px solid #dee2e6;
+            }}
+        
+            .metric-value {{
+                font-size: 24pt;
+                font-weight: bold;
+                color: #2c3e50;
+                margin: 10px 0;
+            }}
+        
+            .metric-label {{
+                color: #6c757d;
+                font-size: 11pt;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }}
+        
+            h2 {{
+                color: #2c3e50;
+                margin: 25px 0 15px 0;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #ecf0f1;
+                font-size: 18pt;
+            }}
+        
+            h3 {{
+                color: #34495e;
+                margin: 20px 0 10px 0;
+                font-size: 14pt;
+            }}
+        
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 15px 0;
+                font-size: 11pt;
+            }}
+        
+            table th {{
+                background: #2c3e50;
+                color: white;
+                padding: 12px;
+                text-align: left;
+                font-weight: bold;
+            }}
+        
+            table td {{
+                padding: 12px;
+                border-bottom: 1px solid #ddd;
+            }}
+        
+            table tr:nth-child(even) {{
+                background: #f8f9fa;
+            }}
+        
+            .recommendations {{
+                background: #fff3cd;
+                border-left: 5px solid #ffc107;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 6px;
+            }}
+        
+            .recommendations ul {{
+                padding-left: 20px;
+                margin: 10px 0;
+            }}
+        
+            .recommendations li {{
+                margin: 8px 0;
+            }}
+        
+            .footer {{
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 2px solid #ecf0f1;
+                text-align: center;
+                color: #7f8c8d;
+                font-size: 10pt;
+            }}
+        
+            .print-button {{
+                display: block;
+                width: 200px;
+                margin: 30px auto;
+                padding: 12px 24px;
+                background: #3498db;
+                color: white;
+                text-align: center;
+                text-decoration: none;
+                border-radius: 6px;
+                font-weight: bold;
+                cursor: pointer;
+                border: none;
+                font-size: 12pt;
+            }}
+        
+            .print-button:hover {{
+                background: #2980b9;
+            }}
+        
+            .badge {{
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 20px;
+                font-size: 10pt;
+                font-weight: bold;
+                margin: 0 5px;
+            }}
+        
+            .badge-success {{
+                background: #d4edda;
+                color: #155724;
+            }}
+        
+            .badge-warning {{
+                background: #fff3cd;
+                color: #856404;
+            }}
+        
+            .badge-danger {{
+                background: #f8d7da;
+                color: #721c24;
+            }}
+        
+            .grade {{
+                font-size: 32pt;
+                font-weight: bold;
+                color: #2c3e50;
+                text-align: center;
+                margin: 20px 0;
+            }}
+        
+            .text-validation {{
+                background: #e8f4fd;
+                border-left: 5px solid #3498db;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 6px;
+            }}
+        
+            .text-validation.success {{
+                background: #d4edda;
+                border-left: 5px solid #28a745;
+            }}
+        
+            .text-validation.warning {{
+                background: #fff3cd;
+                border-left: 5px solid #ffc107;
+            }}
+        
+            .text-validation.danger {{
+                background: #f8d7da;
+                border-left: 5px solid #dc3545;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>📊 ОТЧЕТ ПО ТЕСТУ ЗВУКОИЗОЛЯЦИИ</h1>
+            <div class="subtitle">Защита от спуфинг-атак - Sound Isolation Tester v3.14</div>
         </div>
-        
+    
+        <div class="info-card">
+            <h2>📋 ИНФОРМАЦИЯ О ТЕСТЕ</h2>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="metric-label">Название теста</div>
+                    <div class="metric-value">{test_name}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Дата и время</div>
+                    <div class="metric-value">{timestamp}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Длительность</div>
+                    <div class="metric-value">{duration:.1f} сек</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Частота дискретизации</div>
+                    <div class="metric-value">{sample_rate} Гц</div>
+                </div>
+            </div>
+        </div>
+    
+        {speech_section}
+        {spoofing_section}
+        {analysis_section}
+    
         <div class="info-card">
             <h2>🔧 ТЕХНИЧЕСКИЕ ДАННЫЕ</h2>
             <table>
@@ -2747,74 +2918,42 @@ class AdvancedSoundTester:
                     <th>Параметр</th>
                     <th>Значение</th>
                 </tr>
-        '''
-        
-        # Добавляем технические данные из metadata
-        if 'files' in metadata:
-            files = metadata['files']
-            for channel, data in files.items():
-                html_content += f'''
                 <tr>
-                    <td>Файл ({channel})</td>
-                    <td>{data.get('filename', 'N/A')}</td>
+                    <td>Фраза для проверки</td>
+                    <td>"{reference_text}"</td>
                 </tr>
-                <tr>
-                    <td>Размер ({channel})</td>
-                    <td>{data.get('filesize_mb', 0):.2f} МБ</td>
-                </tr>
-                <tr>
-                    <td>Сэмплов ({channel})</td>
-                    <td>{data.get('samples', 0):,}</td>
-                </tr>
-                '''
-        
-        html_content += f'''
-            </table>
-        </div>
-        
-        <div class="info-card">
-            <h2>📊 СИСТЕМНАЯ ИНФОРМАЦИЯ</h2>
-            <table>
                 <tr>
                     <td>Дата создания отчета</td>
                     <td>{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</td>
                 </tr>
                 <tr>
                     <td>Версия приложения</td>
-                    <td>Sound Isolation Tester v3.14 (защита от спуфинг-атак)</td>
-                </tr>
-                <tr>
-                    <td>Операционная система</td>
-                    <td>{sys.platform}</td>
-                </tr>
-                <tr>
-                    <td>Версия Python</td>
-                    <td>{sys.version.split()[0]}</td>
+                    <td>Sound Isolation Tester v3.14</td>
                 </tr>
             </table>
         </div>
-        
+    
         <div class="footer">
             <p>Отчет сгенерирован автоматически. Для печати нажмите Ctrl+P</p>
             <p>Все данные конфиденциальны и предназначены только для академического использования</p>
         </div>
-        
+    
         <button class="print-button no-print" onclick="window.print()">🖨️ Печать отчета</button>
-        
+    
         <script>
-            // Автоматически предлагаем печать после загрузки
             window.onload = function() {{
                 // Автоматическое открытие диалога печати (можно закомментировать если не нужно)
                 // setTimeout(() => {{ window.print(); }}, 1000);
             }};
         </script>
     </body>
-    </html>
-        '''
-        
+    </html>'''
+    
         # Сохраняем HTML файл
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(html_content)
+    
+        print(f"✅ HTML отчет сохранен: {filename}")
     
     
     def _create_text_report(self, metadata, analysis_data, filename):
@@ -3653,6 +3792,183 @@ class AdvancedSoundTester:
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка отображения результатов спуфинга: {e}")
 
+    def _parse_results_to_report_data(self, result_text, test_name):
+        """Преобразовать текст результатов в структурированные данные для отчета"""
+        report_data = {
+            'test_name': test_name,
+            'has_speech_data': False,
+            'has_spoofing_data': False,
+            'speech_results': {},
+            'spoofing_results': {},
+            'analysis_results': {},
+            'parsed_sections': []
+        }
+        
+        try:
+            lines = result_text.split('\n')
+            
+            # Ищем и извлекаем разные типы данных
+            for i, line in enumerate(lines):
+                # 1. Распознанные тексты
+                if 'ВНУТРИ:' in line and i+1 < len(lines):
+                    inside_text = lines[i+1].strip().strip('"')
+                    if inside_text and 'Не распознано' not in inside_text:
+                        report_data['has_speech_data'] = True
+                        report_data['speech_results']['inside_text'] = inside_text
+                
+                elif 'СНАРУЖИ' in line and i+1 < len(lines):
+                    outside_text = lines[i+1].strip().strip('"')
+                    if outside_text:
+                        report_data['has_speech_data'] = True
+                        report_data['speech_results']['outside_text'] = outside_text
+                
+                # 2. Уверенность распознавания
+                elif 'Уверенность:' in line:
+                    confidence = line.split(':')[1].strip()
+                    if 'ВНУТРИ' in lines[i-1]:
+                        report_data['speech_results']['inside_confidence'] = confidence
+                    elif 'СНАРУЖИ' in lines[i-1]:
+                        report_data['speech_results']['outside_confidence'] = confidence
+                
+                # 3. Совпадение с эталоном (для спуфинга)
+                elif 'Совпадение с эталоном:' in line:
+                    report_data['has_spoofing_data'] = True
+                    report_data['spoofing_results']['match_percent'] = line.split(':')[1].strip()
+                
+                # 4. Ослабление звука (для звукоизоляции)
+                elif 'Ослабление звука:' in line:
+                    report_data['analysis_results']['attenuation_db'] = line.split(':')[1].strip()
+                
+                # 5. Эффективность изоляции
+                elif 'Эффективность изоляции:' in line:
+                    report_data['analysis_results']['isolation_efficiency'] = line.split(':')[1].strip()
+            
+            # Записываем, какие разделы были найдены
+            if report_data['has_speech_data']:
+                report_data['parsed_sections'].append('speech')
+            if report_data['has_spoofing_data']:
+                report_data['parsed_sections'].append('spoofing')
+            if report_data['analysis_results']:
+                report_data['parsed_sections'].append('analysis')
+                
+        except Exception as e:
+            print(f"Ошибка парсинга результатов: {e}")
+        
+        return report_data
+
+    def _show_format_selection_dialog(self, test_name, report_data):
+        """Показать диалог выбора формата отчета"""
+        format_window = tk.Toplevel(self.root)
+        format_window.title("Выбор формата отчета")
+        format_window.geometry("500x400")  # Увеличил высоту
+        format_window.transient(self.root)
+        format_window.grab_set()
+    
+        # Центрируем окно
+        format_window.update_idletasks()
+        x = (self.root.winfo_screenwidth() // 2) - (500 // 2)
+        y = (self.root.winfo_screenheight() // 2) - (400 // 2)
+        format_window.geometry(f'500x400+{x}+{y}')
+    
+        # Заголовок
+        ttk.Label(format_window, text="📄 ВЫБЕРИТЕ ФОРМАТ ОТЧЕТА", 
+                 font=('Arial', 12, 'bold')).pack(pady=10)
+    
+        # Информация о доступных данных
+        info_frame = ttk.LabelFrame(format_window, text="📊 ДОСТУПНЫЕ ДАННЫЕ", padding="10")
+        info_frame.pack(fill=tk.X, padx=20, pady=10)
+    
+        info_text = f"Тест: {test_name}\n\n"
+    
+        if report_data['has_speech_data']:
+            info_text += "✅ Данные распознавания речи\n"
+            inside_text = report_data['speech_results'].get('inside_text', '')
+            if inside_text:
+                if len(inside_text) > 40:
+                    info_text += f"   • Внутри: \"{inside_text[:40]}...\"\n"
+                else:
+                    info_text += f"   • Внутри: \"{inside_text}\"\n"
+        
+            outside_text = report_data['speech_results'].get('outside_text', '')
+            if outside_text:
+                if len(outside_text) > 40:
+                    info_text += f"   • Снаружи: \"{outside_text[:40]}...\"\n"
+                else:
+                    info_text += f"   • Снаружи: \"{outside_text}\"\n"
+    
+        if report_data['has_spoofing_data']:
+            info_text += "✅ Данные проверки спуфинга\n"
+            if 'match_score' in report_data['spoofing_results']:
+                info_text += f"   • Совпадение: {report_data['spoofing_results']['match_score']}\n"
+    
+        if report_data['has_analysis_data']:
+            info_text += "✅ Данные анализа звукоизоляции\n"
+            if 'attenuation_db' in report_data['analysis_results']:
+                info_text += f"   • Ослабление: {report_data['analysis_results']['attenuation_db']} дБ\n"
+            if 'isolation_efficiency' in report_data['analysis_results']:
+                info_text += f"   • Эффективность: {report_data['analysis_results']['isolation_efficiency']}\n"
+    
+        if not any([report_data['has_speech_data'], 
+                    report_data['has_spoofing_data'], 
+                    report_data['has_analysis_data']]):
+            info_text += "⚠️ Только базовые метаданные\n"
+            info_text += "Сначала выполните 'Распознать речь'\n"
+    
+        ttk.Label(info_frame, text=info_text, justify=tk.LEFT).pack()
+    
+        # Выбор формата
+        format_var = tk.StringVar(value="html")
+    
+        formats_frame = ttk.LabelFrame(format_window, text="📁 ФОРМАТЫ ОТЧЕТА", padding="10")
+        formats_frame.pack(fill=tk.X, padx=20, pady=10)
+    
+        formats = [
+            ("📄 HTML - красивый, для печати", "html"),
+        ]
+    
+        for text, value in formats:
+            ttk.Radiobutton(formats_frame, text=text, 
+                           value=value, variable=format_var).pack(anchor=tk.W, pady=2)
+    
+        # Кнопка создания
+        def create_report():
+            if not any([report_data['has_speech_data'], 
+                        report_data['has_spoofing_data'], 
+                        report_data['has_analysis_data']]):
+                messagebox.showwarning("Нет данных", 
+                    "Сначала выполните анализ или распознавание речи")
+                format_window.destroy()
+                return
+        
+            format_window.destroy()
+            self._create_report_file(test_name, format_var.get(), report_data)
+    
+        ttk.Button(format_window, text="📄 Создать отчет", 
+                  command=create_report, width=20).pack(pady=15)
+    
+        ttk.Button(format_window, text="❌ Отмена", 
+              command=format_window.destroy).pack()
+
+    def _load_test_metadata(self, test_name):
+        """Загрузить метаданные теста"""
+        metadata_path = os.path.join(self.recordings_folder, f"{test_name}_metadata.json")
+        
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                pass
+        
+        # Возвращаем базовые метаданные если файл не найден
+        return {
+            'test_name': test_name,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'duration': 0,
+            'sample_rate': 16000,
+            'reference_text': 'Не задана'
+        }
+
     def on_closing(self):
         """Обработчик закрытия окна"""
         try:
@@ -3672,6 +3988,8 @@ class AdvancedSoundTester:
         except Exception as e:
             print(f"Ошибка при закрытии: {e}")
             self.root.destroy()
+
+    
 
 def main():
     """Главная функция"""
