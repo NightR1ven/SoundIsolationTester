@@ -2062,78 +2062,6 @@ class AdvancedSoundTester:
             traceback.print_exc()
             self.status_var.set("❌ Ошибка распознавания")
     
-    def check_spoofing(self):
-        """Проверка записи на спуфинг-атаки"""
-        try:
-            selection = self.recordings_tree.selection()
-            if not selection:
-                messagebox.showwarning("Предупреждение", "Выберите запись для проверки")
-                return
-            
-            # Получаем данные выбранной записи
-            item = self.recordings_tree.item(selection[0])
-            test_name = item['values'][0]
-            
-            # Находим файлы записи
-            outside_path = os.path.join(self.recordings_folder, f"{test_name}_outside.wav")
-            
-            if not os.path.exists(outside_path):
-                messagebox.showerror("Ошибка", "Файл записи не найден")
-                return
-            
-            # Проверяем спуфинг
-            from spoof_detector import SpoofingDetector
-            detector = SpoofingDetector()
-            
-            self.status_var.set("🛡️ Проверка на спуфинг...")
-            
-            spoof_result = detector.analyze_for_spoofing(outside_path)
-            
-            # Отображаем результаты
-            result_text = "=" * 60 + "\n"
-            result_text += f"ПРОВЕРКА НА СПУФИНГ-АТАКИ: {test_name}\n"
-            result_text += "=" * 60 + "\n\n"
-            
-            if spoof_result:
-                if spoof_result['is_spoofing_suspected']:
-                    result_text += "❌ ОБНАРУЖЕНА ВОЗМОЖНАЯ СПУФИНГ-АТАКА!\n\n"
-                    result_text += f"Тип атаки: {spoof_result['suspected_attack_type']}\n"
-                    result_text += f"Уверенность: {spoof_result['confidence']*100:.1f}%\n\n"
-                    
-                    result_text += "Метрики анализа:\n"
-                    for key, value in spoof_result['metrics'].items():
-                        result_text += f"  • {key}: {value:.3f}\n"
-                    
-                    result_text += "\nПредупреждения:\n"
-                    for warning in spoof_result['warnings']:
-                        result_text += f"  ⚠️ {warning}\n"
-                    
-                    result_text += "\n💡 Рекомендации:\n"
-                    result_text += "  • Проверьте источник звука\n"
-                    result_text += "  • Убедитесь, что используется живая речь\n"
-                    result_text += "  • Проверьте уровень громкости\n"
-                    result_text += "  • Исключите использование музыки или шума\n"
-                else:
-                    result_text += "✅ СПУФИНГ-АТАКИ НЕ ОБНАРУЖЕНЫ\n\n"
-                    result_text += "Метрики анализа:\n"
-                    for key, value in spoof_result['metrics'].items():
-                        result_text += f"  • {key}: {value:.3f}\n"
-            else:
-                result_text += "❌ Ошибка проверки спуфинга\n"
-            
-            result_text += "\n" + "=" * 60
-            
-            # Отображаем в интерфейсе
-            self.result_text.config(state=tk.NORMAL)
-            self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(tk.END, result_text)
-            self.result_text.config(state=tk.DISABLED)
-            
-            self.status_var.set("✅ Проверка спуфинга завершена")
-            
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка проверки спуфинга: {e}")
-    
     def delete_recording(self):
         """Удалить выбранную запись"""
         try:
@@ -2466,14 +2394,6 @@ class AdvancedSoundTester:
             # Создаем отчет в выбранном формате
             if format_type == "html":
                 self._create_html_report(metadata, filename, report_data)
-            elif format_type == "excel":
-                self._create_excel_report(metadata, filename, report_data)
-            elif format_type == "csv":
-                self._create_csv_report(metadata, filename, report_data)
-            elif format_type == "json":
-                self._create_json_report(metadata, filename, report_data)
-            else:
-                self._create_text_report(metadata, filename, report_data)
         
             # Показываем результат
             messagebox.showinfo("Успех", f"Отчет сохранен:\n{filename}")
@@ -2954,84 +2874,6 @@ class AdvancedSoundTester:
             f.write(html_content)
     
         print(f"✅ HTML отчет сохранен: {filename}")
-    
-    
-    def _create_text_report(self, metadata, analysis_data, filename):
-        """Создать текстовый отчет"""
-        report = "=" * 70 + "\n"
-        report += "ОТЧЕТ О ТЕСТЕ ЗВУКОИЗОЛЯЦИИ (с защитой от спуфинг-атак)\n"
-        report += "=" * 70 + "\n\n"
-        
-        report += f"Имя теста: {metadata.get('test_name', 'N/A')}\n"
-        report += f"Дата и время: {metadata.get('timestamp', 'N/A')}\n"
-        report += f"Частота дискретизации: {metadata.get('sample_rate', 'N/A')} Гц\n"
-        report += f"Длительность: {metadata.get('duration', 0):.2f} сек\n"
-        report += f"Фраза для проверки: {metadata.get('reference_text', 'Не задана')}\n\n"
-        
-        if analysis_data:
-            results = analysis_data.get('results', {})
-            overall = results.get('overall_assessment', {})
-            text_validation = results.get('text_validation', {})
-            
-            report += "ПРОВЕРКА ЗАЩИТЫ ОТ СПУФИНГА:\n"
-            report += "-" * 40 + "\n"
-            if text_validation:
-                if text_validation.get('valid', False):
-                    report += "✅ Текст успешно проверен\n"
-                else:
-                    report += "❌ Текст НЕ соответствует!\n"
-                    report += "   ВНИМАНИЕ: Возможна спуфинг-атака!\n"
-                report += f"   Заданный текст: {text_validation.get('reference', 'N/A')}\n"
-                report += f"   Распознанный текст: {text_validation.get('recognized', 'N/A')}\n"
-                report += f"   Совпадение: {text_validation.get('match_score', 0)*100:.1f}%\n"
-            else:
-                report += "⚠️ Проверка текста не выполнена\n"
-            report += "\n"
-            
-            report += "РЕЗУЛЬТАТЫ АНАЛИЗА:\n"
-            report += "-" * 40 + "\n"
-            report += f"Вердикт: {overall.get('verdict', 'Н/Д')}\n"
-            report += f"Оценка: {overall.get('grade', 'Н/Д')}\n"
-            report += f"Сводка: {overall.get('summary', 'Н/Д')}\n\n"
-            
-            # Рекомендации
-            recommendations = overall.get('recommendations', [])
-            if recommendations:
-                report += "РЕКОМЕНДАЦИИ:\n"
-                report += "-" * 40 + "\n"
-                for i, rec in enumerate(recommendations, 1):
-                    report += f"{i}. {rec}\n"
-                report += "\n"
-        
-        report += "ТЕХНИЧЕСКИЕ ДАННЫЕ:\n"
-        report += "-" * 40 + "\n"
-        if 'files' in metadata:
-            files = metadata['files']
-            for channel, data in files.items():
-                report += f"{channel.upper()}:\n"
-                report += f"  Файл: {data.get('filename', 'N/A')}\n"
-                report += f"  Размер: {data.get('filesize_mb', 0):.2f} МБ\n"
-                report += f"  Сэмплов: {data.get('samples', 0):,}\n"
-        
-        report += "\n" + "=" * 70 + "\n"
-        report += "СИСТЕМНАЯ ИНФОРМАЦИЯ:\n"
-        report += "-" * 40 + "\n"
-        report += f"Дата создания отчета: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        report += f"Версия приложения: Sound Isolation Tester v3.14 (защита от спуфинг-атак)\n"
-        report += f"Операционная система: {sys.platform}\n"
-        report += f"Версия Python: {sys.version.split()[0]}\n"
-        
-        report += "\n" + "=" * 70 + "\n"
-        report += "ПРИМЕЧАНИЕ:\n"
-        report += "-" * 40 + "\n"
-        report += "Для защиты от спуфинг-атек:\n"
-        report += "• Всегда используйте уникальные фразы для каждого теста\n"
-        report += "• Произносите фразу громко и четко\n"
-        report += "• Проверяйте соответствие распознанного текста заданному\n"
-        report += "• Анализируйте технические показатели на наличие аномалий\n"
-        
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(report)
     
     def play_recording(self):
         """Воспроизвести выбранную запись"""
@@ -3791,70 +3633,6 @@ class AdvancedSoundTester:
         
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка отображения результатов спуфинга: {e}")
-
-    def _parse_results_to_report_data(self, result_text, test_name):
-        """Преобразовать текст результатов в структурированные данные для отчета"""
-        report_data = {
-            'test_name': test_name,
-            'has_speech_data': False,
-            'has_spoofing_data': False,
-            'speech_results': {},
-            'spoofing_results': {},
-            'analysis_results': {},
-            'parsed_sections': []
-        }
-        
-        try:
-            lines = result_text.split('\n')
-            
-            # Ищем и извлекаем разные типы данных
-            for i, line in enumerate(lines):
-                # 1. Распознанные тексты
-                if 'ВНУТРИ:' in line and i+1 < len(lines):
-                    inside_text = lines[i+1].strip().strip('"')
-                    if inside_text and 'Не распознано' not in inside_text:
-                        report_data['has_speech_data'] = True
-                        report_data['speech_results']['inside_text'] = inside_text
-                
-                elif 'СНАРУЖИ' in line and i+1 < len(lines):
-                    outside_text = lines[i+1].strip().strip('"')
-                    if outside_text:
-                        report_data['has_speech_data'] = True
-                        report_data['speech_results']['outside_text'] = outside_text
-                
-                # 2. Уверенность распознавания
-                elif 'Уверенность:' in line:
-                    confidence = line.split(':')[1].strip()
-                    if 'ВНУТРИ' in lines[i-1]:
-                        report_data['speech_results']['inside_confidence'] = confidence
-                    elif 'СНАРУЖИ' in lines[i-1]:
-                        report_data['speech_results']['outside_confidence'] = confidence
-                
-                # 3. Совпадение с эталоном (для спуфинга)
-                elif 'Совпадение с эталоном:' in line:
-                    report_data['has_spoofing_data'] = True
-                    report_data['spoofing_results']['match_percent'] = line.split(':')[1].strip()
-                
-                # 4. Ослабление звука (для звукоизоляции)
-                elif 'Ослабление звука:' in line:
-                    report_data['analysis_results']['attenuation_db'] = line.split(':')[1].strip()
-                
-                # 5. Эффективность изоляции
-                elif 'Эффективность изоляции:' in line:
-                    report_data['analysis_results']['isolation_efficiency'] = line.split(':')[1].strip()
-            
-            # Записываем, какие разделы были найдены
-            if report_data['has_speech_data']:
-                report_data['parsed_sections'].append('speech')
-            if report_data['has_spoofing_data']:
-                report_data['parsed_sections'].append('spoofing')
-            if report_data['analysis_results']:
-                report_data['parsed_sections'].append('analysis')
-                
-        except Exception as e:
-            print(f"Ошибка парсинга результатов: {e}")
-        
-        return report_data
 
     def _show_format_selection_dialog(self, test_name, report_data):
         """Показать диалог выбора формата отчета"""

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Отчет по тесту звукоизоляции - test_20251229_013008</title>
+        <style>
+            /* Стили остаются без изменений */
+            @media print {
+                @page {
+                    margin: 2cm;
+                    size: A4;
+                }
+                body {
+                    font-size: 12pt;
+                }
+                .page-break {
+                    page-break-before: always;
+                }
+                .no-print {
+                    display: none;
+                }
+            }
+        
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+        
+            body {
+                font-family: 'Arial', sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 210mm;
+                margin: 0 auto;
+                padding: 20mm;
+                background-color: #f9f9f9;
+            }
+        
+            .header {
+                text-align: center;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 3px solid #2c3e50;
+            }
+        
+            .header h1 {
+                color: #2c3e50;
+                font-size: 24pt;
+                margin-bottom: 10px;
+            }
+        
+            .header .subtitle {
+                color: #7f8c8d;
+                font-size: 14pt;
+            }
+        
+            .info-card {
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px 0;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-left: 5px solid #3498db;
+            }
+        
+            .result-card {
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px 0;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-left: 5px solid #2ecc71;
+            }
+        
+            .verdict-card {
+                background: white;
+                border-radius: 8px;
+                padding: 30px;
+                margin: 30px 0;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                text-align: center;
+                border: 2px solid #e74c3c;
+            }
+        
+            .verdict-card h2 {
+                color: #e74c3c;
+                font-size: 20pt;
+                margin-bottom: 15px;
+            }
+        
+            .metrics-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 15px;
+                margin: 20px 0;
+            }
+        
+            .metric-item {
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 6px;
+                text-align: center;
+                border: 1px solid #dee2e6;
+            }
+        
+            .metric-value {
+                font-size: 24pt;
+                font-weight: bold;
+                color: #2c3e50;
+                margin: 10px 0;
+            }
+        
+            .metric-label {
+                color: #6c757d;
+                font-size: 11pt;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+        
+            h2 {
+                color: #2c3e50;
+                margin: 25px 0 15px 0;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #ecf0f1;
+                font-size: 18pt;
+            }
+        
+            h3 {
+                color: #34495e;
+                margin: 20px 0 10px 0;
+                font-size: 14pt;
+            }
+        
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 15px 0;
+                font-size: 11pt;
+            }
+        
+            table th {
+                background: #2c3e50;
+                color: white;
+                padding: 12px;
+                text-align: left;
+                font-weight: bold;
+            }
+        
+            table td {
+                padding: 12px;
+                border-bottom: 1px solid #ddd;
+            }
+        
+            table tr:nth-child(even) {
+                background: #f8f9fa;
+            }
+        
+            .recommendations {
+                background: #fff3cd;
+                border-left: 5px solid #ffc107;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 6px;
+            }
+        
+            .recommendations ul {
+                padding-left: 20px;
+                margin: 10px 0;
+            }
+        
+            .recommendations li {
+                margin: 8px 0;
+            }
+        
+            .footer {
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 2px solid #ecf0f1;
+                text-align: center;
+                color: #7f8c8d;
+                font-size: 10pt;
+            }
+        
+            .print-button {
+                display: block;
+                width: 200px;
+                margin: 30px auto;
+                padding: 12px 24px;
+                background: #3498db;
+                color: white;
+                text-align: center;
+                text-decoration: none;
+                border-radius: 6px;
+                font-weight: bold;
+                cursor: pointer;
+                border: none;
+                font-size: 12pt;
+            }
+        
+            .print-button:hover {
+                background: #2980b9;
+            }
+        
+            .badge {
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 20px;
+                font-size: 10pt;
+                font-weight: bold;
+                margin: 0 5px;
+            }
+        
+            .badge-success {
+                background: #d4edda;
+                color: #155724;
+            }
+        
+            .badge-warning {
+                background: #fff3cd;
+                color: #856404;
+            }
+        
+            .badge-danger {
+                background: #f8d7da;
+                color: #721c24;
+            }
+        
+            .grade {
+                font-size: 32pt;
+                font-weight: bold;
+                color: #2c3e50;
+                text-align: center;
+                margin: 20px 0;
+            }
+        
+            .text-validation {
+                background: #e8f4fd;
+                border-left: 5px solid #3498db;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 6px;
+            }
+        
+            .text-validation.success {
+                background: #d4edda;
+                border-left: 5px solid #28a745;
+            }
+        
+            .text-validation.warning {
+                background: #fff3cd;
+                border-left: 5px solid #ffc107;
+            }
+        
+            .text-validation.danger {
+                background: #f8d7da;
+                border-left: 5px solid #dc3545;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>📊 ОТЧЕТ ПО ТЕСТУ ЗВУКОИЗОЛЯЦИИ</h1>
+            <div class="subtitle">Защита от спуфинг-атак - Sound Isolation Tester v3.14</div>
+        </div>
+    
+        <div class="info-card">
+            <h2>📋 ИНФОРМАЦИЯ О ТЕСТЕ</h2>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <div class="metric-label">Название теста</div>
+                    <div class="metric-value">test_20251229_013008</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Дата и время</div>
+                    <div class="metric-value">2025-12-29 01:32:38</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Длительность</div>
+                    <div class="metric-value">3.0 сек</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Частота дискретизации</div>
+                    <div class="metric-value">44100 Гц</div>
+                </div>
+            </div>
+        </div>
+    
+        
+            <div class="info-card">
+                <h2>🎤 РЕЗУЛЬТАТЫ РАСПОЗНАВАНИЯ РЕЧИ</h2>
+                <table>
+                    <tr>
+                        <th>Параметр</th>
+                        <th>Значение</th>
+                    </tr>
+                    <tr>
+                        <td>Текст внутри помещения</td>
+                        <td>"Может быть жёпо"</td>
+                    </tr>
+                    <tr>
+                        <td>Текст снаружи помещения</td>
+                        <td>"Уй, Жопа!"</td>
+                    </tr>
+                </table>
+            </div>
+            
+        
+            <div class="info-card">
+                <h2>🛡️ РЕЗУЛЬТАТЫ ПРОВЕРКИ СПУФИНГА</h2>
+                <table>
+                    <tr>
+                        <th>Параметр</th>
+                        <th>Значение</th>
+                    </tr>
+                    <tr>
+                        <td>Совпадение с эталоном</td>
+                        <td>0.0%</td>
+                    </tr>
+                    <tr>
+                        <td>Порог прохождения</td>
+                        <td>80.0%</td>
+                    </tr>
+                    <tr>
+                        <td>Уверенность распознавания</td>
+                        <td>50.0%</td>
+                    </tr>
+                </table>
+            </div>
+            
+        
+    
+        <div class="info-card">
+            <h2>🔧 ТЕХНИЧЕСКИЕ ДАННЫЕ</h2>
+            <table>
+                <tr>
+                    <th>Параметр</th>
+                    <th>Значение</th>
+                </tr>
+                <tr>
+                    <td>Фраза для проверки</td>
+                    <td>"хуй жопа"</td>
+                </tr>
+                <tr>
+                    <td>Дата создания отчета</td>
+                    <td>2025-12-29 20:10:34</td>
+                </tr>
+                <tr>
+                    <td>Версия приложения</td>
+                    <td>Sound Isolation Tester v3.14</td>
+                </tr>
+            </table>
+        </div>
+    
+        <div class="footer">
+            <p>Отчет сгенерирован автоматически. Для печати нажмите Ctrl+P</p>
+            <p>Все данные конфиденциальны и предназначены только для академического использования</p>
+        </div>
+    
+        <button class="print-button no-print" onclick="window.print()">🖨️ Печать отчета</button>
+    
+        <script>
+            window.onload = function() {
+                // Автоматическое открытие диалога печати (можно закомментировать если не нужно)
+                // setTimeout(() => { window.print(); }, 1000);
+            };
+        </script>
+    </body>
+    </html>
